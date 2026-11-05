@@ -1,0 +1,45 @@
+# ===== 隐私与敏感数据（绝不提交）=====
+# 内部开发规范（不公开）
+docs/Agent开发规范.md
+# 个人简历、密钥等本地私有文件
+private/
+# 含 API Key / Webhook 密钥的配置文件
+config.yaml
+config.*.yaml
+*.env
+.env*
+
+# ===== 运行时数据 =====
+# SQLite 数据库（投递记录/会话/告警）
+data/
+*.db
+*.db-journal
+*.sqlite3
+# 日志
+logs/
+*.log
+
+# ===== 浏览器会话（含登录态，绝不提交）=====
+.browser_profile/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# ===== 测试产物 =====
+.pytest_cache/
+.coverage
+htmlcov/
+test-output/
+
+# ===== IDE / OS =====
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
