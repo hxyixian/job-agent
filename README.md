@@ -14,7 +14,7 @@
 - **多站点扩展**：`SiteAdapter` 抽象接口预留其他招聘平台适配
 - **本地 Web 控制台**：FastAPI，浏览器访问 localhost
 
-技术栈：Python 3.10+ / Playwright / FastAPI / OpenAI 兼容 API（DeepSeek、GLM、通义等）/ SQLite / pytest。
+技术栈：Python 3.10+ / Playwright / FastAPI / OpenAI 兼容 API（DeepSeek、GLM、通义等）/ SQLite / pytest / uv（包管理）。
 
 ## 项目结构（随开发推进更新）
 
@@ -26,7 +26,7 @@ private/               # 本地私有文件（简历等，不入库，见 .gitig
 
 ## 快速开始
 
-开发中，暂不可运行。交付后将提供 `requirements.txt` 与启动说明。
+开发中，暂不可运行。交付后使用 [uv](https://docs.astral.sh/uv/) 管理依赖与 Python 版本（`uv sync` 一键恢复环境），并另行导出 `requirements.txt` 备用。
 
 ## 隐私与安全
 
