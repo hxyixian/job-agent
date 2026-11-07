@@ -14,12 +14,15 @@
   小写），入库直接写 ``.value`` 即合法；
 - ``LoginState`` / ``RiskSignal`` 语义见设计文档 §5.2（含 EVICTED /
   SECURITY_CHECK 的判定来源 [B6,B7,G2,H1]），定义按 Stage2 任务书 S2a
-  落在本模块，adapters/base.py 复用。
+  落在本模块，adapters/base.py 复用；
+- ``ResumeText`` / ``ResumeSnapshot`` / ``JobDirection``：§5.5 I4/I10
+  所需类型，由 Stage3 S3c 落入本模块（I10 的提供方是 S3c）；
+  ``evaluate_job``（S3a）等调用方一律从本模块导入。
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, StrEnum
 from typing import Literal
@@ -27,10 +30,13 @@ from typing import Literal
 __all__ = [
     "Conversation",
     "JobDetail",
+    "JobDirection",
     "JobRef",
     "LoginState",
     "Message",
     "MsgType",
+    "ResumeSnapshot",
+    "ResumeText",
     "RiskSignal",
     "SendOutcome",
 ]
@@ -137,3 +143,47 @@ class RiskSignal(Enum):
     PLATFORM_LIMIT = "platform_limit"
     EVICTED = "evicted"
     SECURITY_CHECK = "security_check"
+
+
+# ---- 简历与方向（§5.5 I4/I10 所需类型；定义方=S3c，见模块 docstring 的
+# "唯一权威定义方"约定）----
+
+
+@dataclass
+class ResumeText:
+    """pypdf 提取的简历全文（§5.5 I10：``parse_resume`` 输出 / ``structure_resume`` 输入）。
+
+    ``source_pdf_hash``：源 PDF 文件字节流的 SHA-256（十六进制），
+    随版本写入 ``resume_snapshots.source_pdf_hash``，用于溯源比对。
+    """
+
+    text: str
+    source_pdf_hash: str | None = None
+
+
+@dataclass
+class ResumeSnapshot:
+    """结构化简历（§5.5 I10 / §9.5：education/experience/skills/projects 四字段）。
+
+    - 作为 AI 上下文的事实来源（招呼语候选/回复生成/匹配评估）[FR2.4]；
+    - 每字段为字符串数组（每条一句概括），**联系方式已在结构化时剔除** [B12]；
+    - 版本化入 ``resume_snapshots``，手动修正生成新版本 [FR2.5]。
+    """
+
+    education: list[str] = field(default_factory=list)
+    experience: list[str] = field(default_factory=list)
+    skills: list[str] = field(default_factory=list)
+    projects: list[str] = field(default_factory=list)
+
+
+@dataclass
+class JobDirection:
+    """职位方向（FR2.2：每组 = 搜索关键词 + 依据说明；``job_directions`` 表的内存形态）。
+
+    ``generate_greeting_candidates``（§5.5 I4）以已确认方向为求职目标输入；
+    方向为空表时生成通用型候选（不报错）。
+    """
+
+    keywords: list[str] = field(default_factory=list)
+    rationale: str = ""
+    is_confirmed: bool = False

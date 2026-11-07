@@ -79,5 +79,6 @@ testpaths = ["tests"]
 addopts = "-W error"
 filterwarnings = [
     # 豁免白名单（-W error 之外放行的已知第三方告警；按需增补）：
-    # "ignore::DeprecationWarning:some_vendor_pkg.*",
+    # aiosmtpd 1.4.x 在 AUTH 处理路径访问 Session.login_data（2.0 将移除，已知弃用告警）
+    "ignore:Session.login_data is deprecated:DeprecationWarning",
 ]
