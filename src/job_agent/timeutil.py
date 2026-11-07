@@ -25,6 +25,20 @@ def _fmt_utc(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
 
 
+def as_utc(dt: datetime) -> datetime:
+    """任意 datetime → UTC（naive 视为 UTC [S2b 补充，供状态机/配额共用]）。"""
+    return dt.astimezone(UTC) if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
+def utc_str(dt: datetime) -> str:
+    """任意 datetime → 毫秒精度 UTC 文本（与库内时间戳同构，可直接字符串比较）。
+
+    [S2b 补充] 滑动窗口起点等"非当前时刻"的时间戳文本必须走本函数：
+    ``strftime(UTC_FORMAT)`` 会产出 6 位微秒，与库内 3 位毫秒字典序不一致。
+    """
+    return _fmt_utc(as_utc(dt))
+
+
 def utcnow_str() -> str:
     """当前 UTC 时间戳文本（毫秒精度，供写入数据库）。"""
     return _fmt_utc(datetime.now(UTC))

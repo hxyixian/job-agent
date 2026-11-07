@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -26,6 +27,8 @@ from pydantic import (
     field_serializer,
     field_validator,
 )
+
+from job_agent.timeutil import CST
 
 # ---- 应用根目录（R6-2：路径一律锚定应用根，与当前工作目录无关）----
 
@@ -60,6 +63,12 @@ SAME_AS_DELIVERY = "same_as_delivery"
 
 # 24 小时制时间字符串 HH:MM（如 "10:00"）；调度器（S2c）负责进一步解析
 HHMM = Annotated[str, StringConstraints(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
+
+
+def _hhmm_minute(hhmm: str) -> int:
+    """HH:MM → 当日分钟数（供 RunSchedule.is_active 比较；格式已由 HHMM 校验）。"""
+    return int(hhmm[0:2]) * 60 + int(hhmm[3:5])
+
 
 # TCP 端口范围
 Port = Annotated[int, Field(ge=1, le=65535)]
@@ -125,6 +134,27 @@ class RunSchedule(StrictModel):
     weekdays: list[Weekday] = Field(default_factory=lambda: [1, 2, 3, 4, 5])
     start: HHMM = "10:00"
     end: HHMM = "16:00"
+
+    def is_active(self, now: datetime | None = None) -> bool:
+        """``now`` 是否落在本时段内（S2c 契约：weekday∈配置、start≤now<end）。
+
+        - weekday 用 ISO 语义（1=周一…7=周日，``datetime.isoweekday``），与
+          ``weekdays`` 字段一致；"工作日=周一~五"是默认配置而非硬编码，
+          不处理法定节假日/调休 [s2]；
+        - ``now`` 缺省取当前 UTC；naive 一律视为 UTC（timeutil 契约），判定
+          前统一折算北京时间（时段以用户本地=北京时刻表述，R6-4）；
+        - 不支持跨午夜时段（与 notify.dnd 免打扰的跨午夜语义不同）：
+          ``start >= end`` 时恒为 False。
+        """
+        if now is None:
+            now = datetime.now(UTC)
+        elif now.tzinfo is None:
+            now = now.replace(tzinfo=UTC)
+        beijing = now.astimezone(CST)
+        if beijing.isoweekday() not in self.weekdays:
+            return False
+        minute = beijing.hour * 60 + beijing.minute
+        return _hhmm_minute(self.start) <= minute < _hhmm_minute(self.end)
 
 
 class PollingConfig(StrictModel):
