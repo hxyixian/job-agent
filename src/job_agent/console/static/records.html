@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>投递记录与看板 - job-agent 控制台</title>
+<style>
+body{font-family:"Microsoft YaHei",system-ui,sans-serif;margin:0;background:#f5f6f8;color:#222}
+header{background:#1f2937;color:#fff;padding:10px 20px;display:flex;gap:18px;align-items:center}
+header a{color:#cfe3ff;text-decoration:none;font-size:14px}
+header b{font-size:16px}
+main{max-width:1180px;margin:16px auto;padding:0 12px}
+.card{background:#fff;border:1px solid #e2e5ea;border-radius:8px;padding:14px 16px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 10px;color:#374151}
+button,select,input{padding:4px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;margin:2px 4px 2px 0}
+button{cursor:pointer;background:#fff}button:hover{background:#eef2f7}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{border-bottom:1px solid #eceef1;padding:5px 8px;text-align:left}
+.meta{font-size:12px;color:#6b7280}
+.metrics{display:flex;gap:12px;flex-wrap:wrap}
+.metric{flex:1;min-width:150px;background:#f8fafc;border:1px solid #e2e5ea;border-radius:8px;padding:10px;text-align:center}
+.metric b{font-size:22px;display:block}
+.bar{display:flex;align-items:center;gap:6px;font-size:12px;margin:2px 0}
+.bar .fill{background:#3b82f6;border-radius:3px;height:12px;min-width:1px}
+.bar .fill.g{background:#16a34a}
+label{font-size:13px}
+</style>
+</head>
+<body>
+<header><b>job-agent 控制台</b><span style="color:#9ca3af">|</span>
+<a href="dashboard.html">总览</a><a href="resume.html">简历与方向</a>
+<a href="greetings.html">招呼语</a><a href="config.html">任务配置</a>
+<a href="outbox.html">待发箱</a><a href="records.html">投递记录与看板</a>
+<a href="notify.html">通知配置</a><a href="ai.html">AI 配置</a>
+<a href="notifications.html">通知中心</a></header>
+<main>
+<div class="card">
+  <h2>统计看板 <span class="meta">窗口：<select id="win" onchange="loadStats()"><option>7</option><option selected>30</option></select> 天</span></h2>
+  <div class="metrics" id="metrics"></div>
+  <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:10px">
+    <div style="flex:1;min-width:300px"><b class="meta">匹配度分布（已投递评估分，10 分一档）</b><div id="hist"></div></div>
+    <div style="flex:1;min-width:300px"><b class="meta">会话状态分布（FR8.2，手动标记优先）</b><div id="convdist"></div></div>
+  </div>
+  <details style="margin-top:8px"><summary class="meta">投递情况自动推断规则（保守；其余保持"沟通中"）</summary>
+    <div id="rules" class="meta"></div></details>
+</div>
+<div class="card">
+  <h2>投递记录</h2>
+  状态筛选（存储值）：<select id="fStatus" onchange="loadApps()"><option value="">全部</option>
+    <option>sent</option><option>failed</option><option>unknown</option>
+    <option>communicating</option><option>read_no_reply</option><option>rejected</option>
+    <option>closed</option><option>interviewed</option></select>
+  公司搜索：<input id="fCompany" placeholder="公司键/岗位关键词" style="width:180px">
+  <label><input type="checkbox" id="fDry" onchange="loadApps()"> 含试运行行</label>
+  <button onclick="loadApps()">查询</button>
+  <table id="apps"></table>
+  <div class="meta" id="appsMeta"></div>
+</div>
+<div class="card">
+  <h2>评估标注 <span class="meta">（G7/L1：want / not_want；导出 CSV → 标注 → 导入）</span></h2>
+  <label>筛选：<select id="fLabel" onchange="loadEvals()"><option value="">全部</option>
+    <option value="unlabeled">未标注</option><option value="labeled">已标注</option></select></label>
+  <a href="/api/evaluations/export" download><button>⬇ 导出 CSV</button></a>
+  <label>导入：<input type="file" id="impFile" accept=".csv"></label>
+  <span class="meta" id="impMsg"></span>
+  <table id="evals"></table>
+</div>
+</main>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ST = {communicating:"沟通中",read_no_reply:"已读不回",rejected:"明确拒绝",closed:"已关闭",interviewed:"已面试",planned:"拟发送",sent:"已发送",failed:"失败",unknown:"待对账",skipped_dryrun:"拟发送"};
+const fmt = (v, suffix) => v === null || v === undefined ? "—" : v + (suffix || "");
+function bars(data, green) {
+  const max = Math.max(1, ...Object.values(data));
+  return Object.entries(data).filter(([,v]) => v > 0).map(([k,v]) =>
+    `<div class="bar"><span style="width:90px;text-align:right">${esc(k)}</span><span class="fill${green?" g":""}" style="width:${v / max * 60}%"></span><span>${v}</span></div>`).join("") || '<span class="meta">（无数据）</span>';
+}
+async function loadStats() {
+  const s = await fetch("/api/stats?window=" + document.getElementById("win").value).then(r => r.json());
+  document.getElementById("metrics").innerHTML = `
+    <div class="metric"><span class="meta">每日投递数（今日，正式）</span><b>${s.daily_count}</b></div>
+    <div class="metric"><span class="meta">回复率（${s.window_days} 天）</span><b>${fmt(s.reply_rate.rate)}</b><span class="meta">${s.reply_rate.replied_sessions}/${s.reply_rate.sent_total} 会话/投递</span></div>
+    <div class="metric"><span class="meta">通过率（${s.window_days} 天）</span><b>${fmt(s.pass_rate.rate)}</b><span class="meta">${s.pass_rate.delivered}/${s.pass_rate.evaluated_total} 投递/评估</span></div>
+    <div class="metric"><span class="meta">待确认面试邀约</span><b>${s.conversation_status.interview_pending_confirm}</b><span class="meta">检测到邀约，等待你确认</span></div>`;
+  const sk = Object.entries(s.pass_rate.skipped_by).map(([k, v]) => `${k}:${v}`).join("，");
+  document.getElementById("hist").innerHTML = bars(s.score_distribution);
+  const cd = Object.fromEntries(Object.entries(s.conversation_status).filter(([k]) => k !== "interview_pending_confirm").map(([k, v]) => [ST[k] || k, v]));
+  document.getElementById("convdist").innerHTML = bars(cd, true) + (sk ? `<p class="meta">评估跳过归因：${esc(sk)}</p>` : "");
+  document.getElementById("rules").innerHTML = s.fr82_rules.map(r => `• ${esc(r.signal)} → ${ST[r.status] || r.status}${r.note ? `（${esc(r.note)}）` : ""}`).join("<br>") + "<br>• 手动标记永远优先于自动推断";
+}
+async function loadApps() {
+  const q = new URLSearchParams({dry_run: document.getElementById("fDry").checked ? 1 : 0, limit: 50});
+  const st = document.getElementById("fStatus").value, co = document.getElementById("fCompany").value.trim();
+  if (st) q.set("status", st); if (co) q.set("company", co);
+  const d = await fetch("/api/applications?" + q).then(r => r.json());
+  document.getElementById("apps").innerHTML = d.items.length === 0 ? '<tr><td class="meta">（空）</td></tr>' :
+    "<tr><th>#</th><th>岗位</th><th>公司</th><th>投递情况</th><th>评估分</th><th>发送时间</th><th>手动标记</th></tr>" +
+    d.items.map(i => `<tr><td>${i.id}</td><td>${esc(i.title || i.job_id)}</td><td>${esc(i.company_name || i.company_key)}</td>
+      <td>${ST[i.effective_status] || esc(i.effective_status)}${i.dry_run ? '<span class="meta">（试运行）</span>' : ""}</td>
+      <td>${fmt(i.eval_score)}${i.eval_verdict ? '<span class="meta">/' + esc(i.eval_verdict) + "</span>" : ""}</td>
+      <td>${esc(i.sent_at || "—")}</td>
+      <td>${i.dry_run ? '<span class="meta">—</span>' : `<select onchange="mark(${i.id}, this.value)">
+        <option value="">—</option><option value="communicating">沟通中</option><option value="read_no_reply">已读不回</option>
+        <option value="rejected">明确拒绝</option><option value="closed">已关闭</option><option value="interviewed">已面试</option></select>`}</td></tr>`).join("");
+  document.getElementById("appsMeta").textContent = `共 ${d.total} 条（展示最新 ${d.items.length} 条）`;
+}
+async function mark(id, status) {
+  if (!status) return;
+  const r = await fetch(`/api/applications/${id}/status`, {method:"POST", headers:{"X-Job-Agent":"console","Content-Type":"application/json"}, body: JSON.stringify({status})});
+  if (!r.ok) alert("标记失败：" + r.status);
+  loadApps(); loadStats();
+}
+async function loadEvals() {
+  const f = document.getElementById("fLabel").value;
+  const d = await fetch("/api/evaluations?limit=100" + (f ? "&labeled=" + (f === "labeled") : "")).then(r => r.json());
+  document.getElementById("evals").innerHTML = d.items.length === 0 ? '<tr><td class="meta">（空）</td></tr>' :
+    `<tr><th>#</th><th>岗位</th><th>分/判定</th><th>理由</th><th>跳过归因</th><th>标注</th></tr>` +
+    d.items.map(i => `<tr><td>${i.id}</td><td>${esc(i.title || i.job_id)}</td><td>${fmt(i.score)} / ${esc(i.verdict || "—")}${i.dry_run ? '<span class="meta">(试运行)</span>' : ""}</td>
+      <td style="max-width:280px" class="meta">${esc(i.reason)}</td><td class="meta">${esc(i.skipped_by || "—")}</td>
+      <td><select onchange="label(${i.id}, this.value)">
+        <option value="">未标注</option><option value="want"${i.user_label === "want" ? " selected" : ""}>want（想投）</option>
+        <option value="not_want"${i.user_label === "not_want" ? " selected" : ""}>not_want（不想投）</option></select></td></tr>`).join("") +
+    `</table><p class="meta">共 ${d.total} 条评估，已标注 ${d.labeled} 条（展示最新 100 条；批量标注请用导出/导入）`;
+}
+async function label(id, v) {
+  const csv = `evaluation_id,user_label\n${id},${v}`;
+  const r = await fetch("/api/evaluations/labels/import", {method:"POST", headers:{"X-Job-Agent":"console","Content-Type":"text/csv"}, body: v ? csv : `evaluation_id,user_label\n${id},`});
+  document.getElementById("impMsg").textContent = r.ok ? "已保存" : "保存失败 " + r.status;
+  loadEvals();
+}
+document.getElementById("impFile").addEventListener("change", async ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  const text = await f.text();
+  const r = await fetch("/api/evaluations/labels/import", {method:"POST", headers:{"X-Job-Agent":"console","Content-Type":"text/csv"}, body: text});
+  const d = await r.json().catch(() => ({}));
+  document.getElementById("impMsg").textContent = r.ok ? `导入完成：更新 ${d.updated}，清除 ${d.cleared}，未找到 ${d.not_found.length}，无效 ${d.invalid.length}` : "导入失败 " + r.status;
+  ev.target.value = ""; loadEvals();
+});
+loadStats(); loadApps(); loadEvals();
+</script>
+</body>
+</html>

@@ -12,13 +12,12 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
-import sys
 import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
 
+from boot_support import BootedAgent, write_config
 from pydantic import ValidationError
 
 from job_agent.config import Config, app_root, default_config_path, resolve_path, safety_warnings
@@ -184,23 +183,21 @@ class R64Timeutil(unittest.TestCase):
 
 class R65MainSmoke(unittest.TestCase):
     def test_main_banner_and_log(self) -> None:
-        """子进程运行入口：退出码 0 + 生成 logs/app.log（锚定应用根）[R6-2/R6-5]。"""
-        log_dir = app_root() / "logs"
-        marker = log_dir / "app.log"
-        existed = marker.exists()
-        proc = subprocess.run(
-            [sys.executable, "-m", "job_agent"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            cwd=tempfile.gettempdir(),  # 换工作目录启动 [R6-2]
-            timeout=60,
-        )
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("job-agent", proc.stdout)
-        self.assertTrue(marker.exists())
-        if not existed:
-            marker.unlink(missing_ok=True)  # 清理本次冒烟产物
+        """子进程运行入口（S5d 终版）：横幅输出 + 生成 logs/app.log + 优雅退出码 0。
+
+        入口现为常驻进程（引擎线程 + 控制台线程，SIGINT/TERM 优雅退出），
+        故以 mock 配置 + 临时 HOME/LOCALAPPDATA 隔离启动（[R6-2]，详见
+        ``boot_support``），优雅停止后断言退出码 0 与 app.log 落盘。
+        """
+        with tempfile.TemporaryDirectory() as home_raw, tempfile.TemporaryDirectory() as lock_raw:
+            home = Path(home_raw)
+            write_config(home)
+            with BootedAgent(home, Path(lock_raw)) as agent:
+                agent.wait_marker("job-agent v", timeout=90)
+                agent.wait_marker("启动自检完成", timeout=30)
+                rc = agent.graceful_stop()
+            self.assertEqual(rc, 0, agent.text("stderr"))
+            self.assertTrue((home / "logs" / "app.log").exists())
 
 
 if __name__ == "__main__":

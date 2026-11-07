@@ -108,7 +108,10 @@ KEY_LAST_COMMAND = "last_command"
 #: 平台限额当日标记（北京日文本；S4c 投递闸门读取同键 [B6]）
 KEY_PLATFORM_LIMIT_DATE = "platform_limit_date"
 
-#: I6 指令枚举（EngineCommand.cmd 的合法值）
+#: I6 指令枚举（EngineCommand.cmd 的合法值）。
+#: ``clear_risk_pause`` 为 S5c 增补（M5 风控暂停的唯一用户恢复通道——控制台
+#: 经队列触发，本线程调用 :func:`rampup.clear_risk_pause`；设计文档 §5.5 I6
+#: 原表未列，集成时同步）。
 COMMANDS: tuple[str, ...] = (
     "start",
     "stop",
@@ -119,6 +122,7 @@ COMMANDS: tuple[str, ...] = (
     "reload_config",
     "approve_outbox",
     "skip_outbox",
+    "clear_risk_pause",
 )
 
 #: M5 风控类信号（→ rampup.handle_risk_pause 统一处置）
@@ -144,6 +148,7 @@ class EngineCommand:
         "reload_config",
         "approve_outbox",
         "skip_outbox",
+        "clear_risk_pause",
     ]
     req_id: str  # uuid4
     issued_at: datetime
@@ -482,6 +487,15 @@ class Orchestrator:
         if cmd.cmd == "skip_outbox":
             detail = self._skip_outbox(cmd)
             return detail == "skipped", detail
+        if cmd.cmd == "clear_risk_pause":
+            # M5 风控暂停的唯一恢复入口（用户决策 → 控制台 → 队列 → 此处；
+            # 幂等：未暂停时 no-op）。清除后 _track_risk_recovery 在下一 tick
+            # 安排一轮对账 [§13]。
+            was_paused = self._risk_paused()
+            rampup.clear_risk_pause(
+                self._db, decided_by=str(cmd.payload.get("decided_by", "console"))
+            )
+            return True, "risk_pause_cleared" if was_paused else "not_paused"
         return False, "unknown_command"
 
     def _approve_outbox(self, cmd: EngineCommand, now: datetime) -> tuple[bool, str]:

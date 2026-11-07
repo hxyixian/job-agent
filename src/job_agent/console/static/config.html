@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>任务配置 · job-agent 控制台</title>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<nav class="topnav">
+  <strong>job-agent 控制台</strong>
+  <a href="resume.html">简历与方向</a>
+  <a href="greetings.html">招呼语工作台</a>
+  <a href="config.html">任务配置</a>
+  <a href="notify.html">通知配置</a>
+  <a href="ai.html">AI 配置</a>
+</nav>
+<main>
+
+<div id="rewrite-notice" class="banner warn">加载中…</div>
+
+<section class="card" id="sec-delivery">
+  <h2>投递（delivery）</h2>
+  <p class="desc">限额/节奏/去重与试运行参数。安全类参数低于实测验证节奏会有警告提示。</p>
+  <div class="grid2">
+    <div>
+      <label class="field">运行星期（1=周一 … 7=周日，逗号分隔）</label>
+      <input type="text" data-path="delivery.run_schedule.weekdays" data-type="nums">
+      <label class="field">每日开始 / 结束</label>
+      <div class="row">
+        <input type="time" data-path="delivery.run_schedule.start">
+        <input type="time" data-path="delivery.run_schedule.end">
+      </div>
+      <label class="field">小时投递上限</label>
+      <input type="number" min="0" data-path="delivery.hourly_limit" data-type="num">
+      <label class="field">每日投递上限</label>
+      <input type="number" id="daily-limit" min="0" data-path="delivery.daily_limit" data-type="num">
+      <label class="field">拟人随机延时范围（秒，如 8,20）</label>
+      <input type="text" data-path="delivery.action_delay_range_s" data-type="nums">
+      <label class="field">消息轮询间隔（分钟，如 3,5）</label>
+      <input type="text" data-path="delivery.polling.interval_range_min" data-type="nums">
+      <label class="row" style="margin-top:10px">
+        <input type="checkbox" id="polling-same">
+        <span>轮询时段与投递时段共用（same_as_delivery）</span>
+      </label>
+      <div id="polling-custom" hidden>
+        <label class="field">轮询自定义时段（星期 / 开始 / 结束）</label>
+        <div class="row">
+          <input type="text" id="polling-weekdays" placeholder="1,2,3,4,5" style="max-width:130px">
+          <input type="time" id="polling-start">
+          <input type="time" id="polling-end">
+        </div>
+      </div>
+    </div>
+    <div>
+      <label class="field">详情页浏览上限（每小时 / 每天）</label>
+      <div class="row">
+        <input type="number" min="1" data-path="delivery.browse_limits.detail_hourly" data-type="num">
+        <input type="number" id="detail-daily" min="1" data-path="delivery.browse_limits.detail_daily" data-type="num">
+      </div>
+      <label class="field">搜索翻页上限（每小时）</label>
+      <input type="number" min="1" data-path="delivery.browse_limits.search_page_hourly" data-type="num">
+      <label class="field">操作最小间隔：详情 / 搜索（秒，实测验证 30s）</label>
+      <div class="row">
+        <input type="number" id="min-detail" min="1" data-path="delivery.min_interval_s.detail" data-type="num">
+        <input type="number" id="min-search" min="1" data-path="delivery.min_interval_s.search" data-type="num">
+      </div>
+      <div id="interval-live-warn" class="banner warn" hidden></div>
+      <label class="field">登录态检测：每循环 / 间隔（分钟）</label>
+      <div class="row">
+        <label style="font-weight:400"><input type="checkbox" data-path="delivery.login_patrol.every_loop" data-type="bool"> 每循环前检测</label>
+        <input type="number" min="1" data-path="delivery.login_patrol.interval_min" data-type="num">
+      </div>
+      <label class="field">同公司去重</label>
+      <div class="row">
+        <select data-path="delivery.dedup.mode">
+          <option value="permanent_blacklist">permanent_blacklist（永久黑名单）</option>
+          <option value="cooldown">cooldown（冷却 N 天）</option>
+        </select>
+        <input type="number" min="1" data-path="delivery.dedup.cooldown_days" data-type="num">
+      </div>
+    </div>
+  </div>
+  <h3 style="font-size:14px;margin-bottom:2px">试运行与放量</h3>
+  <div class="grid2">
+    <div>
+      <label class="row" style="margin-top:8px">
+        <input type="checkbox" data-path="delivery.dry_run" data-type="bool">
+        <span><strong>试运行（dry_run）</strong>：send_* 仅记录不实际发送（首次安装默认开启）</span>
+      </label>
+      <label class="row">
+        <input type="checkbox" data-path="delivery.browse_rampup.enabled" data-type="bool">
+        <span>试运行浏览放量（首日低档，无风控日翻倍）</span>
+      </label>
+      <div class="row">
+        <span style="font-size:13px;color:var(--muted)">首日详情上限：</span>
+        <input type="number" min="1" data-path="delivery.browse_rampup.first_day.detail_hourly" data-type="num">
+        <input type="number" min="1" data-path="delivery.browse_rampup.first_day.detail_daily" data-type="num">
+        <label style="font-weight:400"><input type="checkbox" data-path="delivery.browse_rampup.double_per_clean_day" data-type="bool"> 逐日翻倍</label>
+      </div>
+    </div>
+    <div>
+      <label class="field">首投放量期天数 / 放量期每日上限</label>
+      <div class="row">
+        <input type="number" min="1" data-path="delivery.ramp_up.enabled_days" data-type="num">
+        <input type="number" min="1" data-path="delivery.ramp_up.daily_limit" data-type="num">
+      </div>
+      <label class="row">
+        <input type="checkbox" data-path="delivery.ramp_up.auto_recover" data-type="bool">
+        <span>放量期满自动恢复配置值并发低级通知</span>
+      </label>
+    </div>
+  </div>
+</section>
+
+<section class="card" id="sec-messaging">
+  <h2>消息（messaging）</h2>
+  <div class="grid2">
+    <div>
+      <label class="field">单会话自动发送消息上限（含招呼语；最小 1）</label>
+      <input type="number" id="auto-reply-limit" min="1" data-path="messaging.auto_reply_limit" data-type="num">
+      <label class="field">附件简历每会话自动投递上限（0-1）</label>
+      <input type="number" min="0" max="1" data-path="messaging.resume_auto_send_limit_per_conv" data-type="num">
+      <label class="field">待发箱超时提醒（分钟）</label>
+      <input type="number" min="1" data-path="messaging.outbox_timeout_min" data-type="num">
+    </div>
+    <div>
+      <label class="row" style="margin-top:22px">
+        <input type="checkbox" data-path="messaging.passive_greeting_enabled" data-type="bool">
+        <span>被动招呼语（HR 来询自动回复，FR3.7；需先在招呼语工作台定稿）</span>
+      </label>
+      <label class="row">
+        <input type="checkbox" data-path="messaging.positive_response_resume_enabled" data-type="bool">
+        <span>正向回应自动投递附件简历（FR3.8）</span>
+      </label>
+    </div>
+  </div>
+</section>
+
+<section class="card" id="sec-match">
+  <h2>匹配排除（match）</h2>
+  <p class="desc">预置排除组（启发式判定，可能误杀，默认关闭）；黑名单一行一家公司。</p>
+  <div id="exclude-groups"></div>
+  <label class="field">公司黑名单（每行一个）</label>
+  <textarea data-path="match.company_blacklist" data-type="strs" rows="3"></textarea>
+</section>
+
+<section class="card" id="sec-notify-ai">
+  <h2>通知与 AI</h2>
+  <p class="desc">通知渠道与 AI 服务在独立页面配置（本页保存会原样保留两节当前值）：</p>
+  <div class="row">
+    <a href="notify.html"><button type="button" class="secondary">通知配置（飞书/邮件/免打扰/测试发送）</button></a>
+    <a href="ai.html"><button type="button" class="secondary">AI 配置（端点/模型/密钥/连通性测试）</button></a>
+  </div>
+</section>
+
+<section class="card">
+  <h2>保存</h2>
+  <div id="daily-cap-hint" class="banner info">加载中…</div>
+  <div id="daily-cap-live" style="color:var(--muted);font-size:13px"></div>
+  <div id="safety-warnings" class="banner warn" hidden></div>
+  <div class="row">
+    <button type="button" id="btn-save-config">保存全部配置</button>
+  </div>
+  <div id="config-msg" class="msg"></div>
+</section>
+
+</main>
+<script src="assets/common.js"></script>
+<script>
+'use strict';
+(function () {
+  var cfg = null;
+  var NUM = document.querySelectorAll.bind(document);
+
+  function getPath(path) {
+    return path.split('.').reduce(function (o, k) { return o ? o[k] : undefined; }, cfg);
+  }
+  function setPath(path, v) {
+    var ks = path.split('.');
+    var o = cfg;
+    for (var i = 0; i < ks.length - 1; i++) o = o[ks[i]];
+    o[ks[ks.length - 1]] = v;
+  }
+  function numsOf(text) {
+    return splitList(text).map(Number).filter(function (n) { return Number.isFinite(n); });
+  }
+
+  function fillInputs() {
+    NUM('[data-path]').forEach(function (el) {
+      var v = getPath(el.getAttribute('data-path'));
+      var t = el.getAttribute('data-type');
+      if (el.type === 'checkbox') el.checked = !!v;
+      else if (t === 'nums') el.value = (v || []).join(',');
+      else if (t === 'strs') el.value = (v || []).join('\n');
+      else el.value = (v === undefined || v === null) ? '' : v;
+    });
+    var poll = cfg.delivery.polling.schedule;
+    var same = poll === 'same_as_delivery' || poll === null || poll === undefined;
+    $('polling-same').checked = same;
+    $('polling-custom').hidden = same;
+    var src = same ? cfg.delivery.run_schedule : poll;
+    $('polling-weekdays').value = (src.weekdays || []).join(',');
+    $('polling-start').value = src.start || '';
+    $('polling-end').value = src.end || '';
+  }
+
+  function collect() {
+    NUM('[data-path]').forEach(function (el) {
+      var t = el.getAttribute('data-type');
+      var p = el.getAttribute('data-path');
+      if (el.type === 'checkbox') setPath(p, el.checked);
+      else if (t === 'nums') setPath(p, numsOf(el.value));
+      else if (t === 'strs') setPath(p, el.value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean));
+      else if (t === 'num') setPath(p, num(el.value, 0));
+      else setPath(p, el.value.trim());
+    });
+    if ($('polling-same').checked) {
+      cfg.delivery.polling.schedule = 'same_as_delivery';
+    } else {
+      var rs = cfg.delivery.run_schedule;
+      cfg.delivery.polling.schedule = {
+        weekdays: numsOf($('polling-weekdays').value).length ? numsOf($('polling-weekdays').value) : rs.weekdays,
+        start: $('polling-start').value || rs.start,
+        end: $('polling-end').value || rs.end
+      };
+    }
+    var groups = [];
+    NUM('#exclude-groups .row.grp').forEach(function (row) {
+      groups.push({
+        id: row.getAttribute('data-gid'),
+        kind: row.getAttribute('data-kind'),
+        enabled: row.querySelector('input[type=checkbox]').checked,
+        keywords: splitList(row.querySelector('input.kw').value),
+        scope: JSON.parse(row.getAttribute('data-scope'))
+      });
+    });
+    cfg.match.exclude_groups = groups;
+  }
+
+  function renderGroups() {
+    var box = $('exclude-groups');
+    box.textContent = '';
+    (cfg.match.exclude_groups || []).forEach(function (g) {
+      var row = document.createElement('div');
+      row.className = 'row grp';
+      row.setAttribute('data-gid', g.id);
+      row.setAttribute('data-kind', g.kind);
+      row.setAttribute('data-scope', JSON.stringify(g.scope || []));
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = g.enabled;
+      var name = document.createElement('span');
+      name.className = 'tag';
+      name.textContent = g.id + (g.kind === 'preset' ? '（预置）' : '');
+      var kw = document.createElement('input');
+      kw.type = 'text';
+      kw.className = 'kw';
+      kw.style.flex = '1 1 260px';
+      kw.value = joinList(g.keywords);
+      var scope = document.createElement('span');
+      scope.style.cssText = 'font-size:12px;color:var(--muted)';
+      scope.textContent = '生效范围：' + (g.scope || []).join('/');
+      row.appendChild(cb);
+      row.appendChild(name);
+      row.appendChild(kw);
+      row.appendChild(scope);
+      box.appendChild(row);
+    });
+  }
+
+  function renderDerived(d) {
+    $('rewrite-notice').textContent = d.rewrite_notice;
+    var e = d.effective_daily_delivery;
+    $('daily-cap-hint').textContent = '每日实际投递上限推算 ≈ ' + e.effective_daily_cap +
+      ' = min(每日投递上限 ' + e.configured_daily_limit + '，详情日浏览上限 ' + e.browse_detail_daily + '）；' +
+      '放量期首日 ≈ ' + e.rampup_first_day_cap + '。' + e.note;
+    var box = $('safety-warnings');
+    if (d.safety_warnings && d.safety_warnings.length) {
+      box.hidden = false;
+      box.textContent = '⚠ ' + d.safety_warnings.join('；');
+    } else { box.hidden = true; }
+  }
+
+  function liveHints() {
+    var a = num($('daily-limit').value, 0);
+    var b = num($('detail-daily').value, 0);
+    $('daily-cap-live').textContent = (a > 0 && b > 0)
+      ? '（实时）当前表单推算：min(' + a + ', ' + b + ') = ' + Math.min(a, b) : '';
+    var warns = [];
+    var d = num($('min-detail').value, 0);
+    var s = num($('min-search').value, 0);
+    if (d && d < 30) warns.push('min_interval_s.detail=' + d + 's 低于实测验证节奏 30s');
+    if (s && s < 30) warns.push('min_interval_s.search=' + s + 's 低于实测验证节奏 30s');
+    var box = $('interval-live-warn');
+    box.hidden = !warns.length;
+    box.textContent = warns.length ? '⚠ ' + warns.join('；') + '——风控风险升高' : '';
+  }
+
+  $('polling-same').addEventListener('change', function () { $('polling-custom').hidden = this.checked; });
+  ['daily-limit', 'detail-daily', 'min-detail', 'min-search'].forEach(function (id) {
+    $(id).addEventListener('input', liveHints);
+  });
+
+  $('btn-save-config').onclick = function () {
+    collect();
+    if (num(cfg.messaging.auto_reply_limit, 0) < 1) {
+      showMsg('config-msg', '校验失败：messaging.auto_reply_limit 最小为 1（下限校验 [A2]）', true);
+      return;
+    }
+    api('/api/config', { method: 'PUT', body: cfg }).then(function (data) {
+      cfg = data.config;
+      fillInputs();
+      renderGroups();
+      renderDerived(data.derived);
+      liveHints();
+      showMsg('config-msg', '已保存：全量重写 config.yaml（手写注释不保留），下一轮调度循环生效', false);
+    }, function (e) { showMsg('config-msg', e.message, true); });
+  };
+
+  api('/api/config').then(function (data) {
+    cfg = data.config;
+    fillInputs();
+    renderGroups();
+    renderDerived(data.derived);
+    liveHints();
+  }, function (e) { showMsg('config-msg', e.message, true); });
+})();
+</script>
+</body>
+</html>

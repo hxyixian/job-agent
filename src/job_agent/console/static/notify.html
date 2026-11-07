@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>通知配置 · job-agent 控制台</title>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<nav class="topnav">
+  <strong>job-agent 控制台</strong>
+  <a href="resume.html">简历与方向</a>
+  <a href="greetings.html">招呼语工作台</a>
+  <a href="config.html">任务配置</a>
+  <a href="notify.html">通知配置</a>
+  <a href="ai.html">AI 配置</a>
+</nav>
+<main>
+
+<div class="banner warn">保存将全量重写 config.yaml：手写注释不会被保留；运行期修改在下一轮调度循环生效。密钥字段打码回显（****尾4位），保持不变即沿用已存原值。</div>
+
+<section class="card" id="sec-feishu">
+  <h2>飞书群机器人（主通知通道）</h2>
+  <label class="field">Webhook 地址 <small>（含令牌，打码回显）</small></label>
+  <input type="text" id="feishu-webhook" style="width:100%" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…">
+  <label class="field">签名校验 Secret（可选，打码回显）</label>
+  <input type="text" id="feishu-secret" placeholder="留空 = 未启用签名">
+  <label class="field">推送级别（high 必推：FR7.2 高级告警飞书必推，不可取消）</label>
+  <div class="row">
+    <label style="font-weight:400"><input type="checkbox" id="level-high" checked disabled> high（锁定）</label>
+    <label style="font-weight:400"><input type="checkbox" id="level-medium"> medium</label>
+    <label style="font-weight:400"><input type="checkbox" id="level-low"> low</label>
+  </div>
+</section>
+
+<section class="card" id="sec-email">
+  <h2>邮件（SMTP SSL，仅 high 级）</h2>
+  <div class="grid2">
+    <div>
+      <label class="field">SMTP 主机 / 端口</label>
+      <div class="row">
+        <input type="text" id="smtp-host" style="flex:1">
+        <input type="number" id="smtp-port" min="1" max="65535" value="465">
+      </div>
+      <label class="field">发件账号</label>
+      <input type="text" id="smtp-user">
+      <label class="field">SMTP 密码 / 授权码（打码回显）</label>
+      <input type="text" id="smtp-password" placeholder="保持 ****回显 不变即沿用原值">
+    </div>
+    <div>
+      <label class="field">收件邮箱</label>
+      <input type="text" id="email-to" placeholder="notify@example.com">
+    </div>
+  </div>
+</section>
+
+<section class="card" id="sec-dnd">
+  <h2>免打扰时段（可跨午夜，如 23:00-07:30）</h2>
+  <label class="row">
+    <input type="checkbox" id="dnd-enabled">
+    <span>启用免打扰（中低级延后，窗口结束合并推送）</span>
+  </label>
+  <div class="row">
+    <label style="font-weight:400">开始 <input type="time" id="dnd-start" value="23:00"></label>
+    <label style="font-weight:400">结束 <input type="time" id="dnd-end" value="07:30"></label>
+    <label style="font-weight:400"><input type="checkbox" id="dnd-high-bypass" checked> high 级不受限</label>
+  </div>
+  <div class="row">
+    <button type="button" id="btn-save-notify">保存通知配置</button>
+  </div>
+  <div id="notify-msg" class="msg"></div>
+</section>
+
+<section class="card" id="sec-test">
+  <h2>测试发送</h2>
+  <p class="desc">默认<strong>假端点</strong>：只渲染将发送的消息正文，不发出任何网络请求；选择「真实发送」会向渠道实际投递一条测试消息（不落库、不进通知中心事件流）。</p>
+  <div class="row">
+    <label style="font-weight:400">渠道
+      <select id="test-channel">
+        <option value="feishu">飞书</option>
+        <option value="email">邮件</option>
+      </select>
+    </label>
+    <label style="font-weight:400">模式
+      <select id="test-mode">
+        <option value="fake">假端点（默认，仅预览）</option>
+        <option value="real">真实发送</option>
+      </select>
+    </label>
+    <label style="font-weight:400"><input type="checkbox" id="test-use-form" checked> 使用当前表单值（未保存也可测）</label>
+    <button type="button" id="btn-notify-test">测试发送</button>
+  </div>
+  <div id="test-result" class="msg"></div>
+  <pre id="test-preview" class="preview" hidden></pre>
+</section>
+
+</main>
+<script src="assets/common.js"></script>
+<script>
+'use strict';
+(function () {
+  function levels() {
+    var out = ['high'];
+    if ($('level-medium').checked) out.push('medium');
+    if ($('level-low').checked) out.push('low');
+    return out;
+  }
+
+  function feishuForm() {
+    return { webhook: $('feishu-webhook').value.trim(), secret: $('feishu-secret').value.trim(), levels: levels() };
+  }
+
+  function emailForm() {
+    return {
+      smtp_host: $('smtp-host').value.trim(),
+      smtp_port: num($('smtp-port').value, 465),
+      user: $('smtp-user').value.trim(),
+      password: $('smtp-password').value,
+      to: $('email-to').value.trim()
+    };
+  }
+
+  function collect() {
+    return {
+      feishu: feishuForm(),
+      email: emailForm(),
+      dnd: {
+        enabled: $('dnd-enabled').checked,
+        start: $('dnd-start').value || '23:00',
+        end: $('dnd-end').value || '07:30',
+        high_bypass: $('dnd-high-bypass').checked
+      }
+    };
+  }
+
+  function fill(data) {
+    var f = data.feishu || {};
+    $('feishu-webhook').value = f.webhook || '';
+    $('feishu-secret').value = f.secret || '';
+    $('level-medium').checked = (f.levels || []).indexOf('medium') >= 0;
+    $('level-low').checked = (f.levels || []).indexOf('low') >= 0;
+    var e = data.email || {};
+    $('smtp-host').value = e.smtp_host || '';
+    $('smtp-port').value = e.smtp_port === undefined ? 465 : e.smtp_port;
+    $('smtp-user').value = e.user || '';
+    $('smtp-password').value = e.password || '';
+    $('email-to').value = e.to || '';
+    var d = data.dnd || {};
+    $('dnd-enabled').checked = !!d.enabled;
+    $('dnd-start').value = d.start || '23:00';
+    $('dnd-end').value = d.end || '07:30';
+    $('dnd-high-bypass').checked = d.high_bypass === undefined ? true : !!d.high_bypass;
+  }
+
+  $('btn-save-notify').onclick = function () {
+    api('/api/config/notify', { method: 'PUT', body: collect() }).then(function () {
+      showMsg('notify-msg', '已保存（全量重写 config.yaml；飞书 levels 必含 high 已在服务端校验）', false);
+    }, function (e) { showMsg('notify-msg', e.message, true); });
+  };
+
+  $('btn-notify-test').onclick = function () {
+    var channel = $('test-channel').value;
+    var body = {
+      channel: channel,
+      mode: $('test-mode').value,
+      config: $('test-use-form').checked ? (channel === 'feishu' ? feishuForm() : emailForm()) : null
+    };
+    if (body.config === null) delete body.config;
+    showMsg('test-result', '发送中…', false);
+    api('/api/notify/test', { method: 'POST', body: body }).then(function (data) {
+      var pre = $('test-preview');
+      if (data.mode === 'fake') {
+        pre.hidden = false;
+        pre.textContent = (data.configured ? '' : '（渠道未配置：以下为将发送的正文预览）\n\n') + data.formatted;
+        showMsg('test-result', '假端点预览完成（未发出网络请求）', false);
+      } else {
+        pre.hidden = true;
+        if (data.ok) showMsg('test-result', '测试消息已真实发送', false);
+        else showMsg('test-result', data.error || '发送失败', true);
+      }
+    }, function (e) {
+      $('test-preview').hidden = true;
+      showMsg('test-result', e.message, true);
+    });
+  };
+
+  api('/api/config/notify').then(function (data) {
+    fill(data.notify || {});
+  }, function (e) { showMsg('notify-msg', e.message, true); });
+})();
+</script>
+</body>
+</html>

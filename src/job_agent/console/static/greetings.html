@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>招呼语工作台 · job-agent 控制台</title>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<nav class="topnav">
+  <strong>job-agent 控制台</strong>
+  <a href="resume.html">简历与方向</a>
+  <a href="greetings.html">招呼语工作台</a>
+  <a href="config.html">任务配置</a>
+  <a href="notify.html">通知配置</a>
+  <a href="ai.html">AI 配置</a>
+</nav>
+<main>
+
+<section class="card" id="workbench-active">
+  <h2>主动招呼语（投递用）</h2>
+  <p class="desc">点击「立即沟通」时由 Boss直聘平台自动发送你设置的预设内容——定稿后需粘贴到平台设置并确认同步（见下方同步区）。</p>
+  <div id="not-finalized-active" class="banner warn" hidden>主动招呼语<strong>尚未定稿</strong>（启动前置条件④未满足）：生成候选并定稿 1 条后，再同步到平台【消息通知 - 设置招呼语】。</div>
+  <div class="row">
+    <button type="button" id="btn-generate-active">生成 3 条候选（AI）</button>
+    <span style="color:var(--muted);font-size:13px">生成输入：当前结构化简历 + 已确认职位方向</span>
+  </div>
+  <div id="candidates-active"></div>
+  <div id="final-box-active" hidden>
+    <label class="field">当前定稿 <span id="final-meta-active" style="color:var(--muted);font-weight:400"></span></label>
+    <textarea id="final-content-active" rows="4"></textarea>
+    <div class="row">
+      <button type="button" id="btn-save-active">保存修改（重新定稿为新版本）</button>
+      <button type="button" id="btn-copy" class="secondary">一键复制文案</button>
+    </div>
+  </div>
+  <div id="sync-box">
+    <div id="sync-state" class="banner info">同步状态：加载中…</div>
+    <label class="row" style="font-size:13px">
+      <input type="checkbox" id="sync-checkbox">
+      <span>我已在 Boss直聘 完成设置：当前定稿内容已粘贴到平台<strong>【消息通知 - 设置招呼语】</strong>（确认与当前内容哈希绑定，模板修改后自动失效）</span>
+    </label>
+    <label class="field">同步指引（平台路径：【消息通知 - 设置招呼语】）</label>
+    <ol class="steps" id="sync-guide">
+      <li>点击「一键复制文案」复制当前定稿的主动招呼语；</li>
+      <li>打开 Boss直聘 App/网页端，进入 <strong>【消息通知 - 设置招呼语】</strong>；</li>
+      <li>粘贴文案并保存——此后点击「立即沟通」时平台自动发送该预设内容；</li>
+      <li>回到本页勾选上方确认框。此后每次修改模板并重新定稿，确认都会自动失效，需要重新同步并勾选。</li>
+    </ol>
+  </div>
+  <div id="msg-active" class="msg"></div>
+</section>
+
+<section class="card" id="workbench-passive">
+  <h2>被动招呼语（HR 来询回复用）</h2>
+  <p class="desc">HR 主动来询后由本软件在会话中直接发送的第一条固定回复；无需平台同步。仅在「任务配置」启用被动招呼（FR3.7）时使用。</p>
+  <div id="not-finalized-passive" class="banner warn" hidden>被动招呼语<strong>尚未定稿</strong>：若启用被动招呼（FR3.7），请生成候选并定稿 1 条。</div>
+  <div class="row">
+    <button type="button" id="btn-generate-passive">生成 3 条候选（AI）</button>
+  </div>
+  <div id="candidates-passive"></div>
+  <div id="final-box-passive" hidden>
+    <label class="field">当前定稿 <span id="final-meta-passive" style="color:var(--muted);font-weight:400"></span></label>
+    <textarea id="final-content-passive" rows="4"></textarea>
+    <div class="row">
+      <button type="button" id="btn-save-passive">保存修改（重新定稿为新版本）</button>
+    </div>
+  </div>
+  <div id="msg-passive" class="msg"></div>
+</section>
+
+</main>
+<script src="assets/common.js"></script>
+<script>
+'use strict';
+(function () {
+  var current = { active: null, passive: null };
+
+  function dirty(kind) {
+    return current[kind] && $('final-content-' + kind).value !== current[kind].content;
+  }
+
+  function renderSync() {
+    var box = $('sync-box');
+    if (!current.active) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    var d = current.active;
+    var edited = dirty('active');
+    var synced = d.platform_synced && !edited;
+    var state = $('sync-state');
+    state.className = 'banner ' + (synced ? 'ok' : edited ? 'warn' : 'error');
+    state.textContent = synced
+      ? '已同步到平台设置（确认于 ' + d.platform_synced_at + '，与当前内容哈希绑定）'
+      : edited
+        ? '内容已修改但尚未重新定稿：定稿后同步确认自动失效，需重新同步'
+        : '未同步：请按下方指引粘贴到平台【消息通知 - 设置招呼语】后勾选确认';
+    var cb = $('sync-checkbox');
+    cb.checked = synced;
+    cb.disabled = synced || edited;
+  }
+
+  function renderKind(kind, data) {
+    current[kind] = data;
+    var missing = !data;
+    $('not-finalized-' + kind).hidden = !missing;
+    $('final-box-' + kind).hidden = missing;
+    if (missing) {
+      $('candidates-' + kind).textContent = '';
+    } else {
+      $('final-content-' + kind).value = data.content;
+      $('final-meta-' + kind).textContent = '（v' + data.version + ' · 定稿于 ' + data.created_at + '）';
+    }
+    if (kind === 'active') renderSync();
+  }
+
+  function loadAll() {
+    return api('/api/greetings/current').then(function (data) {
+      renderKind('active', data.active);
+      renderKind('passive', data.passive);
+    });
+  }
+
+  function renderCandidates(kind, list) {
+    var box = $('candidates-' + kind);
+    box.textContent = '';
+    list.forEach(function (text, i) {
+      var card = document.createElement('div');
+      card.className = 'candidate';
+      var head = document.createElement('div');
+      head.className = 'head';
+      head.textContent = '候选 ' + (i + 1) + ' / ' + list.length + '（可在下方编辑后定稿）';
+      var ta = document.createElement('textarea');
+      ta.rows = 3;
+      ta.value = text;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = '定稿此候选';
+      btn.onclick = function () { finalize(kind, ta.value); };
+      card.appendChild(head);
+      card.appendChild(ta);
+      card.appendChild(btn);
+      box.appendChild(card);
+    });
+  }
+
+  function finalize(kind, content) {
+    api('/api/greetings/current', { method: 'PUT', body: { kind: kind, content: content } })
+      .then(function (data) {
+        renderKind(kind, data);
+        $('candidates-' + kind).textContent = '';
+        showMsg('msg-' + kind, '已定稿（v' + data.version + '）' +
+          (kind === 'active' ? '——记得同步到平台并重新勾选确认' : ''), false);
+      }, function (e) { showMsg('msg-' + kind, e.message, true); });
+  }
+
+  function generate(kind) {
+    showMsg('msg-' + kind, 'AI 生成中…', false);
+    api('/api/greetings/generate?kind=' + kind, { method: 'POST' }).then(function (data) {
+      renderCandidates(kind, data.candidates);
+      showMsg('msg-' + kind, '已生成 3 条候选：编辑后选一条「定稿」', false);
+    }, function (e) { showMsg('msg-' + kind, e.message, true); });
+  }
+
+  ['active', 'passive'].forEach(function (kind) {
+    $('btn-generate-' + kind).onclick = function () { generate(kind); };
+    $('btn-save-' + kind).onclick = function () { finalize(kind, $('final-content-' + kind).value); };
+  });
+
+  $('final-content-active').addEventListener('input', renderSync);
+
+  $('btn-copy').onclick = function () {
+    var text = $('final-content-active').value;
+    if (!text.trim()) { showMsg('msg-active', '尚无定稿内容可复制', true); return; }
+    var done = function () { showMsg('msg-active', '已复制：请粘贴到平台【消息通知 - 设置招呼语】', false); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+    } else { fallbackCopy(text); done(); }
+  };
+
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  }
+
+  $('sync-checkbox').addEventListener('change', function () {
+    if (!this.checked) { this.checked = true; return; }
+    api('/api/greetings/platform-synced', { method: 'POST', body: { kind: 'active' } })
+      .then(function (data) {
+        renderKind('active', data);
+        showMsg('msg-active', '已确认同步（与当前内容哈希绑定）', false);
+      }, function (e) { showMsg('msg-active', e.message, true); });
+  });
+
+  loadAll().catch(function (e) { showMsg('msg-active', e.message, true); });
+})();
+</script>
+</body>
+</html>

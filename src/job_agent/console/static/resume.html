@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>简历与方向 · job-agent 控制台</title>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<nav class="topnav">
+  <strong>job-agent 控制台</strong>
+  <a href="resume.html">简历与方向</a>
+  <a href="greetings.html">招呼语工作台</a>
+  <a href="config.html">任务配置</a>
+  <a href="notify.html">通知配置</a>
+  <a href="ai.html">AI 配置</a>
+</nav>
+<main>
+
+<section class="card" id="upload-card">
+  <h2>上传简历（PDF）</h2>
+  <p class="desc">仅支持文字版 PDF：解析 → AI 结构化 → 版本入库（每字段一句概括，联系方式自动剔除）。扫描件会被拒绝。</p>
+  <form id="upload-form">
+    <div class="row">
+      <input type="file" id="resume-file" accept=".pdf">
+      <button type="submit">上传并解析</button>
+    </div>
+  </form>
+  <div id="regenerate-hint" class="banner warn" hidden></div>
+  <div id="upload-msg" class="msg"></div>
+</section>
+
+<section class="card" id="structured-card">
+  <h2>结构化简历（行内编辑）</h2>
+  <p class="desc" id="version-info">尚未上传简历</p>
+  <div id="structured-editor" hidden>
+    <div id="sec-education"><label class="field">教育经历</label></div>
+    <div id="sec-experience"><label class="field">工作经历</label></div>
+    <div id="sec-skills"><label class="field">技能</label></div>
+    <div id="sec-projects"><label class="field">项目经历</label></div>
+    <div class="row">
+      <button type="button" id="btn-save-structured">保存修改（生成新版本）</button>
+      <span style="color:var(--muted);font-size:13px">保存为新的当前版本；含联系方式（手机/邮箱/微信等）的条目会被自动剔除。</span>
+    </div>
+  </div>
+  <div id="structured-msg" class="msg"></div>
+</section>
+
+<section class="card" id="directions-card">
+  <h2>职位方向</h2>
+  <p class="desc">每组 = 一组搜索关键词 + 一句依据说明。生成的是<strong>候选</strong>（未确认）；勾选后「确认所选」写入已确认集（整体替换）。生成不是唯一入口：可手动添加/编辑后走「保存手动编辑」。</p>
+  <div class="row">
+    <button type="button" id="btn-generate-directions">生成候选（AI）</button>
+    <button type="button" id="btn-add-direction" class="secondary">手动添加一组</button>
+    <button type="button" id="btn-confirm-directions">确认所选</button>
+    <button type="button" id="btn-edit-directions" class="secondary">保存手动编辑</button>
+  </div>
+  <div class="row" style="color:var(--muted);font-size:12.5px">
+    <span>勾选 = 计入已确认集</span><span>关键词用「、」或逗号分隔</span>
+  </div>
+  <div id="directions-list"></div>
+  <div id="directions-msg" class="msg"></div>
+</section>
+
+</main>
+<script src="assets/common.js"></script>
+<script>
+'use strict';
+(function () {
+  var FIELDS = [
+    ['education', '教育经历'],
+    ['experience', '工作经历'],
+    ['skills', '技能'],
+    ['projects', '项目经历']
+  ];
+  var structured = null;
+
+  function structRow(line) {
+    var row = document.createElement('div');
+    row.className = 'row';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.style.flex = '1 1 100%';
+    input.value = line;
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'secondary';
+    del.textContent = '删除';
+    del.onclick = function () { row.remove(); };
+    row.appendChild(input);
+    row.appendChild(del);
+    return row;
+  }
+
+  function renderField(field) {
+    var box = $('sec-' + field);
+    var rows = box.querySelectorAll('.row');
+    for (var i = 0; i < rows.length; i++) rows[i].remove();
+    (structured[field] || []).forEach(function (line) { box.appendChild(structRow(line)); });
+    var add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'secondary';
+    add.textContent = '添加一条';
+    add.onclick = function () { box.appendChild(structRow('')); };
+    box.appendChild(add);
+  }
+
+  function renderStructured() {
+    $('structured-editor').hidden = !structured;
+    if (structured) FIELDS.forEach(function (f) { renderField(f[0]); });
+  }
+
+  function collectStruct() {
+    var out = {};
+    FIELDS.forEach(function (f) {
+      var inputs = $('sec-' + f[0]).querySelectorAll('.row input[type=text]');
+      out[f[0]] = Array.prototype.map.call(inputs, function (i) { return i.value.trim(); })
+        .filter(Boolean);
+    });
+    return out;
+  }
+
+  function loadResume() {
+    return api('/api/resume/structured').then(function (data) {
+      structured = data.structured;
+      if (data.version) {
+        var hash = data.version.source_pdf_hash || '';
+        $('version-info').textContent = '当前版本 v' + data.version.id + ' · 入库于 ' +
+          data.version.created_at + (hash ? ' · 源 PDF ' + hash.slice(0, 12) + '…' : '');
+      } else {
+        $('version-info').textContent = '尚未上传简历';
+      }
+      $('regenerate-hint').hidden = true;
+      renderStructured();
+    });
+  }
+
+  $('upload-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var f = $('resume-file').files[0];
+    if (!f) { showMsg('upload-msg', '请先选择 PDF 文件', true); return; }
+    var fd = new FormData();
+    fd.append('file', f);
+    api('/api/resume/upload', { method: 'POST', formData: fd }).then(function (data) {
+      showMsg('upload-msg', '解析完成：已入库为版本 v' + data.version.id, false);
+      loadResume().then(function () {
+        $('regenerate-hint').hidden = !data.regenerate_hint;
+        if (data.regenerate_hint) $('regenerate-hint').textContent = data.regenerate_hint_text;
+      });
+      loadDirections();
+    }, function (e) { showMsg('upload-msg', e.message, true); });
+  });
+
+  $('btn-save-structured').onclick = function () {
+    api('/api/resume/structured', { method: 'PUT', body: collectStruct() }).then(function (data) {
+      structured = data.structured;
+      renderStructured();
+      showMsg('structured-msg', '已保存为版本 v' + data.version.id + '（含联系方式的条目已自动剔除）', false);
+    }, function (e) { showMsg('structured-msg', e.message, true); });
+  };
+
+  function dirRow(d) {
+    var row = document.createElement('div');
+    row.className = 'row dir';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = d.is_confirmed;
+    var tag = document.createElement('span');
+    tag.className = 'tag' + (d.is_confirmed ? ' on' : '');
+    tag.textContent = d.is_confirmed ? '已确认' : '候选';
+    var kw = document.createElement('input');
+    kw.type = 'text';
+    kw.className = 'kw';
+    kw.value = joinList(d.keywords);
+    kw.placeholder = '搜索关键词（顿号/逗号分隔）';
+    var ra = document.createElement('input');
+    ra.type = 'text';
+    ra.className = 'ra';
+    ra.value = d.rationale || '';
+    ra.placeholder = '依据说明';
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'secondary';
+    del.textContent = '删除';
+    del.onclick = function () { row.remove(); };
+    row.appendChild(cb);
+    row.appendChild(tag);
+    row.appendChild(kw);
+    row.appendChild(ra);
+    row.appendChild(del);
+    return row;
+  }
+
+  function loadDirections() {
+    return api('/api/directions').then(function (data) {
+      var list = $('directions-list');
+      list.textContent = '';
+      if (!data.directions.length) {
+        var empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = '暂无职位方向：点击「生成候选（AI）」或「手动添加一组」';
+        list.appendChild(empty);
+        return;
+      }
+      data.directions.forEach(function (d) { list.appendChild(dirRow(d)); });
+    });
+  }
+
+  function collectChecked() {
+    var rows = $('directions-list').querySelectorAll('.row.dir');
+    var out = [];
+    Array.prototype.forEach.call(rows, function (row) {
+      var cb = row.querySelector('input[type=checkbox]');
+      if (!cb.checked) return;
+      out.push({
+        keywords: splitList(row.querySelector('.kw').value),
+        rationale: row.querySelector('.ra').value.trim()
+      });
+    });
+    return out;
+  }
+
+  function saveDirections(source) {
+    var rows = $('directions-list').querySelectorAll('.row.dir');
+    var directions = collectChecked();
+    if (rows.length && !directions.length) {
+      showMsg('directions-msg', '尚未勾选任何方向：请勾选要保留的行，或先删除不需要的行再保存', true);
+      return;
+    }
+    if (!directions.length && !window.confirm('将清空全部已确认方向（启动前置条件③会亮红），继续？')) return;
+    api('/api/directions', { method: 'PUT', body: { source: source, directions: directions } })
+      .then(function (data) {
+        showMsg('directions-msg', '已保存 ' + data.directions.length + ' 组已确认方向', false);
+        loadDirections();
+      }, function (e) { showMsg('directions-msg', e.message, true); });
+  }
+
+  $('btn-generate-directions').onclick = function () {
+    showMsg('directions-msg', 'AI 生成中…（依据当前简历事实，已确认方向不受影响）', false);
+    api('/api/directions/generate', { method: 'POST' }).then(function (data) {
+      showMsg('directions-msg', '已生成 ' + data.directions.length + ' 组候选：勾选后点「确认所选」', false);
+      loadDirections();
+    }, function (e) { showMsg('directions-msg', e.message, true); });
+  };
+
+  $('btn-add-direction').onclick = function () {
+    var list = $('directions-list');
+    var empty = list.querySelector('.empty');
+    if (empty) empty.remove();
+    list.appendChild(dirRow({ keywords: [], rationale: '', is_confirmed: false }));
+  };
+
+  $('btn-confirm-directions').onclick = function () { saveDirections('confirm'); };
+  $('btn-edit-directions').onclick = function () { saveDirections('edit'); };
+
+  loadResume().catch(function (e) { showMsg('upload-msg', e.message, true); });
+  loadDirections().catch(function (e) { showMsg('directions-msg', e.message, true); });
+})();
+</script>
+</body>
+</html>

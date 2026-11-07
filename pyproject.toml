@@ -10,12 +10,16 @@ dependencies = [
     "patchright==1.64.4",
     "fastapi",
     "uvicorn",
+    # 控制台简历上传（S5b POST /api/resume/upload 的 Form/File 端点在路由
+    # 注册期即要求 python-multipart；S5d 装配 A-BOOT-1 health 依赖）
+    "python-multipart",
     "openai",
     "pydantic",
     "pydantic-settings",
     "pyyaml",
     "pypdf",
     # 注：jinja2 暂不引入（v1 控制台 = 静态 HTML + vanilla JS，无服务端模板，"如需"条件未命中）
+    "python-multipart>=0.0.33",
 ]
 
 [dependency-groups]

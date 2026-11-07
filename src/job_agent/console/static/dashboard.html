@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>总览 - job-agent 控制台</title>
+<style>
+body{font-family:"Microsoft YaHei",system-ui,sans-serif;margin:0;background:#f5f6f8;color:#222}
+header{background:#1f2937;color:#fff;padding:10px 20px;display:flex;gap:18px;align-items:center}
+header a{color:#cfe3ff;text-decoration:none;font-size:14px}
+header b{font-size:16px}
+main{max-width:980px;margin:16px auto;padding:0 12px}
+.card{background:#fff;border:1px solid #e2e5ea;border-radius:8px;padding:14px 16px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 10px;color:#374151}
+.state{display:inline-block;padding:10px 22px;border-radius:8px;font-size:18px;font-weight:600;color:#fff}
+.s-running{background:#16a34a}.s-paused{background:#d97706}.s-stopped{background:#6b7280}
+.s-risk{background:#dc2626}
+button{padding:6px 14px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;margin:2px 4px 2px 0}
+button:hover{background:#eef2f7}
+button.danger{border-color:#dc2626;color:#dc2626}
+button:disabled{opacity:.45;cursor:not-allowed}
+.banner{padding:10px 14px;border-radius:6px;margin-bottom:8px;font-size:14px;white-space:pre-wrap}
+.b-dry{background:#fef3c7;border:1px solid #f59e0b;color:#92400e;font-weight:600}
+.b-high{background:#fee2e2;border:1px solid #dc2626;color:#991b1b}
+.b-info{background:#dbeafe;border:1px solid #2563eb;color:#1e40af}
+.banner .guide{display:block;font-size:12px;margin-top:4px;font-weight:400}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{border-bottom:1px solid #eceef1;padding:6px 8px;text-align:left}
+li.item{padding:4px 0;border-bottom:1px dashed #e5e7eb;font-size:13px}
+.ok{color:#16a34a}.miss{color:#dc2626;font-weight:600}.unknown{color:#92400e}
+.meta{font-size:12px;color:#6b7280}
+</style>
+</head>
+<body>
+<header><b>job-agent 控制台</b><span style="color:#9ca3af">|</span>
+<a href="dashboard.html">总览</a><a href="resume.html">简历与方向</a>
+<a href="greetings.html">招呼语</a><a href="config.html">任务配置</a>
+<a href="outbox.html">待发箱</a><a href="records.html">投递记录与看板</a>
+<a href="notify.html">通知配置</a><a href="ai.html">AI 配置</a>
+<a href="notifications.html">通知中心</a></header>
+<main>
+<div id="banners"></div>
+<div class="card">
+  <h2>引擎状态</h2>
+  <div><span id="state" class="state s-stopped">未知</span>
+    <span class="meta" id="stateMeta"></span></div>
+  <div style="margin-top:10px">
+    <button id="btnStart" onclick="engine('start')">▶ 启动</button>
+    <button id="btnPause" onclick="engine('pause')">⏸ 暂停</button>
+    <button id="btnResume" onclick="engine('resume')">⏵ 恢复</button>
+    <button id="btnStop" class="danger" onclick="engine('stop')">⏹ 停止</button>
+    <button onclick="post('/api/browser/relaunch')">↻ 重新拉起浏览器</button>
+    <button id="btnLogin" onclick="post('/api/browser/login-mode')">🔑 打开登录模式</button>
+    <button id="btnLoginDone" onclick="post('/api/browser/login-mode',{closed:true})">✓ 登录完成（窗口已关闭）</button>
+  </div>
+  <p class="meta">登录模式：普通 Chrome 窗口扫码登录，窗口打开期间引擎启动被互斥 [M3/G5]；
+  登录完成后请先关闭登录窗口再点「登录完成」。指令经队列异步执行，结果见下方回执。</p>
+  <div id="ack" class="meta"></div>
+</div>
+<div class="card"><h2>启动前置条件（缺任一项投递任务不启动）</h2><ul id="prereq" style="list-style:none;padding:0;margin:0"></ul></div>
+<div class="card" id="plannedCard" style="display:none">
+  <h2>试运行拟发送清单（正式运行将发出什么）</h2>
+  <div id="planned"></div>
+</div>
+</main>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function post(url, body) {
+  const r = await fetch(url, {method:"POST", headers:{"X-Job-Agent":"console","Content-Type":"application/json"}, body: body===undefined?"{}":JSON.stringify(body)});
+  const d = await r.json().catch(() => ({}));
+  document.getElementById("ack").textContent = r.ok ? `已入队：${d.cmd}（req_id=${d.req_id.slice(0,8)}…，等待引擎执行回执）` : `失败(${r.status})：${JSON.stringify(d)}`;
+  setTimeout(load, 1200);
+}
+const engine = a => post("/api/engine/" + a);
+const STATE_TXT = {running:"运行中", paused:"已暂停", stopped:"已停止"};
+async function load() {
+  const [st, al, pq] = await Promise.all(["/api/status","/api/alerts","/api/prereq"].map(u => fetch(u).then(r => r.json())));
+  const e = st.engine || {}, risk = st.risk_pause || {};
+  const el = document.getElementById("state");
+  const blocked = e.risk_paused || e.fatal_reason;
+  el.className = "state " + (e.risk_paused || e.fatal_reason ? "s-risk" : e.state === "running" ? "s-running" : e.state === "paused" ? "s-paused" : "s-stopped");
+  el.textContent = e.risk_paused ? "熔断：风控暂停" : e.fatal_reason === "login_expired" ? "熔断：登录失效" : e.fatal_reason === "adapter_broken" ? "熔断：适配器失效" : (STATE_TXT[e.state] || "未知");
+  document.getElementById("stateMeta").textContent =
+    ` ${e.state}${st.dry_run ? "｜试运行" : "｜正式"}${e.login_mode ? "｜登录窗口打开中" : ""}` +
+    (st.rampup && st.rampup.state === "active" ? `｜放量期（剩余 ${st.rampup.days_left} 天）` : "") +
+    `｜更新于 ${esc(e.updated_at || "从未运行")}`;
+  ["Start","Pause","Resume","Stop","Login"].forEach(k => document.getElementById("btn" + k).disabled = !!e.login_mode && k !== "Stop");
+  const lc = st.last_command;
+  document.getElementById("ack").textContent = lc ? `最近指令回执：${lc.cmd} ok=${lc.ok}（${esc(lc.detail)}）@ ${esc(lc.at)}` : "尚无指令回执";
+  let html = "";
+  if (st.dry_run) html += `<div class="banner b-dry">🧪 试运行中——不会实际发送任何消息/投递（send_* 仅记录拟发送）</div>`;
+  for (const a of al.alerts || []) {
+    const cls = a.level === "high" ? "b-high" : "b-info";
+    const btn = a.action === "clear_risk_pause" ? `<button class="danger" onclick="post('/api/engine/clear-risk-pause')">恢复运行（清除风控暂停）</button>` :
+      a.action === "relaunch_browser" ? `<button onclick="post('/api/browser/relaunch')">重新拉起浏览器</button>` :
+      a.action === "login_mode_closed" ? `<button onclick="post('/api/browser/login-mode',{closed:true})">登录完成</button>` : "";
+    html += `<div class="banner ${cls}">${esc(a.message)}<span class="guide">${esc(a.guide || "")}</span>${btn}</div>`;
+  }
+  document.getElementById("banners").innerHTML = html;
+  document.getElementById("prereq").innerHTML = (pq.items || []).map(i =>
+    `<li class="item">${i.ok === true ? '<span class="ok">✔</span>' : i.ok === false ? '<span class="miss">✘</span>' : '<span class="unknown">？</span>'} ${esc(i.key)}${i.ok !== true && !i.required_in_dry_run && pq.dry_run ? "（试运行下缓冲为运行时检测）" : ""}${i.ok === false || i.ok === null ? `<span class="meta"> — ${esc(i.guide)}</span>` : ""}</li>`).join("")
+    + `<li class="meta">${pq.all_met ? "前置条件全部满足 ✔" : "存在未满足项（上方红/黄项）"}</li>`;
+  document.getElementById("plannedCard").style.display = st.dry_run ? "" : "none";
+  if (st.dry_run) {
+    const pl = await fetch("/api/dryrun/planned?limit=50").then(r => r.json());
+    document.getElementById("planned").innerHTML = pl.total === 0 ? '<span class="meta">暂无拟发送记录</span>' :
+      `<table><tr><th>类型</th><th>对象</th><th>时间</th></tr>` + pl.items.map(i => `<tr><td>${esc(i.kind)}</td><td>${esc(i.target_label)}</td><td>${esc(i.created_at)}</td></tr>`).join("") + `</table><p class="meta">共 ${pl.total} 条（最新 50 条；正式运行将按相同节奏发出）</p>`;
+  }
+}
+load(); setInterval(load, 5000);
+</script>
+</body>
+</html>

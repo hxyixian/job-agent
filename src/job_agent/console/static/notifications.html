@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>通知中心 - job-agent 控制台</title>
+<style>
+body{font-family:"Microsoft YaHei",system-ui,sans-serif;margin:0;background:#f5f6f8;color:#222}
+header{background:#1f2937;color:#fff;padding:10px 20px;display:flex;gap:18px;align-items:center}
+header a{color:#cfe3ff;text-decoration:none;font-size:14px}
+header b{font-size:16px}
+main{max-width:980px;margin:16px auto;padding:0 12px}
+.card{background:#fff;border:1px solid #e2e5ea;border-radius:8px;padding:14px 16px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 10px;color:#374151}
+button{padding:4px 12px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;margin:2px 4px 2px 0}
+button:hover{background:#eef2f7}
+button.active{background:#1f2937;color:#fff;border-color:#1f2937}
+.event{border-bottom:1px solid #eceef1;padding:8px 4px;font-size:13px}
+.lv{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;margin-right:8px}
+.lv-high{background:#fee2e2;color:#991b1b}.lv-medium{background:#fef3c7;color:#92400e}.lv-low{background:#e5e7eb;color:#4b5563}
+.payload{color:#6b7280;font-size:12px;white-space:pre-wrap;word-break:break-all;margin:4px 0 0}
+.meta{font-size:12px;color:#6b7280}
+</style>
+</head>
+<body>
+<header><b>job-agent 控制台</b><span style="color:#9ca3af">|</span>
+<a href="dashboard.html">总览</a><a href="resume.html">简历与方向</a>
+<a href="greetings.html">招呼语</a><a href="config.html">任务配置</a>
+<a href="outbox.html">待发箱</a><a href="records.html">投递记录与看板</a>
+<a href="notify.html">通知配置</a><a href="ai.html">AI 配置</a>
+<a href="notifications.html">通知中心</a></header>
+<main>
+<div class="card">
+  <h2>通知中心 <span class="meta" id="counts"></span></h2>
+  <div>
+    <button class="active" data-lv="" onclick="setLevel(this)">全部</button>
+    <button data-lv="high" onclick="setLevel(this)">仅 high</button>
+    <button data-lv="medium" onclick="setLevel(this)">仅 medium</button>
+    <button data-lv="low" onclick="setLevel(this)">仅 low</button>
+    <button onclick="load()" style="float:right">↻ 刷新</button>
+  </div>
+  <div id="list"></div>
+  <div style="margin-top:8px"><button id="more" onclick="loadMore()">加载更多</button><span class="meta" id="meta"></span></div>
+</div>
+</main>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let level = "", offset = 0;
+const PAGE = 50;
+function setLevel(btn) {
+  document.querySelectorAll("button[data-lv]").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  level = btn.dataset.lv; offset = 0; load(false);
+}
+async function load(append) {
+  const q = new URLSearchParams({limit: PAGE, offset});
+  if (level) q.set("level", level);
+  const d = await fetch("/api/notifications?" + q).then(r => r.json());
+  document.getElementById("counts").textContent =
+    `共 ${d.total} 条（high ${d.counts.high || 0}｜medium ${d.counts.medium || 0}｜low ${d.counts.low || 0}）`;
+  const html = d.items.map(e => `<div class="event"><span class="lv lv-${e.level}">${e.level}</span><b>${esc(e.event_type)}</b>
+    <span class="meta">${esc(e.created_at)}</span>${e.delivered ? `<span class="meta">｜投递：${esc(JSON.stringify(e.delivered))}</span>` : ""}
+    <div class="payload">${esc(JSON.stringify(e.payload))}</div></div>`).join("");
+  document.getElementById("list").innerHTML = append ? document.getElementById("list").innerHTML + html : (html || '<div class="meta">（暂无事件）</div>');
+  document.getElementById("meta").textContent = `已展示 ${offset + d.items.length} / ${d.total} 条`;
+  document.getElementById("more").style.display = offset + d.items.length < d.total ? "" : "none";
+}
+function loadMore() { offset += PAGE; load(true); }
+load(false);
+</script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>待发箱 - job-agent 控制台</title>
+<style>
+body{font-family:"Microsoft YaHei",system-ui,sans-serif;margin:0;background:#f5f6f8;color:#222}
+header{background:#1f2937;color:#fff;padding:10px 20px;display:flex;gap:18px;align-items:center}
+header a{color:#cfe3ff;text-decoration:none;font-size:14px}
+header b{font-size:16px}
+main{max-width:1080px;margin:16px auto;padding:0 12px}
+.card{background:#fff;border:1px solid #e2e5ea;border-radius:8px;padding:14px 16px;margin-bottom:14px}
+h2{font-size:15px;margin:0 0 10px;color:#374151}
+button{padding:4px 12px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;margin:2px 4px 2px 0}
+button:hover{background:#eef2f7}
+button.warn{border-color:#dc2626;color:#dc2626}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{border-bottom:1px solid #eceef1;padding:6px 8px;text-align:left;vertical-align:top}
+.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px}
+.t-pending{background:#dbeafe;color:#1e40af}.t-stale{background:#fef3c7;color:#92400e}
+.t-approved{background:#dcfce7;color:#166534}.t-skipped{background:#e5e7eb;color:#4b5563}
+.t-expired{background:#fee2e2;color:#991b1b}
+.stale-note{color:#92400e;font-size:12px;display:block}
+.meta{font-size:12px;color:#6b7280}
+select{padding:4px}
+</style>
+</head>
+<body>
+<header><b>job-agent 控制台</b><span style="color:#9ca3af">|</span>
+<a href="dashboard.html">总览</a><a href="resume.html">简历与方向</a>
+<a href="greetings.html">招呼语</a><a href="config.html">任务配置</a>
+<a href="outbox.html">待发箱</a><a href="records.html">投递记录与看板</a>
+<a href="notify.html">通知配置</a><a href="ai.html">AI 配置</a>
+<a href="notifications.html">通知中心</a></header>
+<main>
+<div class="card">
+  <h2>待发箱 <span class="meta" id="counts"></span></h2>
+  <p class="meta">人工确认发送<strong>不计入</strong>会话自动回复数 [B10]；试运行期间确认只记拟发送、不实际发送。
+  <span style="color:#92400e">stale = 确认前会话又收到新消息，草稿可能过时——建议重新生成后确认。</span></p>
+  <div>
+    状态筛选：<select id="state" onchange="load()">
+      <option value="">全部</option><option>pending</option><option>stale</option>
+      <option>approved</option><option>skipped</option><option>expired</option>
+    </select>
+    <button onclick="load()">↻ 刷新</button>
+  </div>
+  <table id="tbl"></table>
+  <div id="msg" class="meta"></div>
+</div>
+</main>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function post(url, body) {
+  const r = await fetch(url, {method:"POST", headers:{"X-Job-Agent":"console","Content-Type":"application/json"}, body: body === undefined ? "{}" : JSON.stringify(body)});
+  const d = await r.json().catch(() => ({}));
+  document.getElementById("msg").textContent = r.ok ? `已入队（${d.cmd} req_id=${d.req_id.slice(0,8)}…）或已执行，结果以引擎回执为准` : `失败(${r.status})：${JSON.stringify(d)}`;
+  setTimeout(load, 1200);
+}
+async function approve(id, stale) {
+  const warn = stale ? "该草稿已被标记 stale（会话有新消息），确认内容是否仍然合适？" : "确认发送这条草稿？";
+  if (confirm(warn + "\n人工确认发送不计自动数。")) post(`/api/outbox/${id}/approve`);
+}
+async function skip(id) { if (confirm("确定跳过这条草稿？")) post(`/api/outbox/${id}/skip`); }
+async function regenerate(id) { if (confirm("用 AI 重新生成草稿？（stale 条目将重新变为 pending）")) post(`/api/outbox/${id}/regenerate`); }
+async function edit(id, old) {
+  const t = prompt("编辑草稿文本：", old);
+  if (t === null) return;
+  if (!t.trim()) { alert("草稿不能为空"); return; }
+  post(`/api/outbox/${id}/edit`, {draft_text: t});
+}
+async function load() {
+  const state = document.getElementById("state").value;
+  const d = await fetch("/api/outbox" + (state ? "?state=" + state : "")).then(r => r.json());
+  const c = d.counts || {};
+  document.getElementById("counts").textContent =
+    `待确认 ${c.pending || 0}｜stale ${c.stale || 0}｜已确认 ${c.approved || 0}｜已跳过 ${c.skipped || 0}｜超时 ${c.expired || 0}`;
+  document.getElementById("tbl").innerHTML = d.items.length === 0 ? '<tr><td class="meta">（空）</td></tr>' :
+    "<tr><th>#</th><th>来源</th><th>会话</th><th>草稿</th><th>状态</th><th>创建时间</th><th>操作</th></tr>" +
+    d.items.map(i => `<tr>
+      <td>${i.id}</td>
+      <td>${i.source === "ai" ? "AI" : "人工占位"}</td>
+      <td>${esc(i.peer_name || i.conv_id)}</td>
+      <td style="max-width:360px">${esc(i.draft_text)}</td>
+      <td><span class="tag t-${i.state}">${i.state}</span>${i.stale ? '<span class="stale-note">会话有新消息，建议重新生成</span>' : ""}</td>
+      <td>${esc(i.created_at)}</td>
+      <td>${["pending","stale"].includes(i.state) ? `<button onclick="approve(${i.id},${i.stale})">确认发送</button><button onclick="skip(${i.id})">跳过</button><button onclick="regenerate(${i.id})">重新生成</button><button onclick='edit(${i.id}, ${JSON.stringify(i.draft_text).replace(/'/g,"&#39;")})'>编辑</button>` : '<span class="meta">—</span>'}</td>
+    </tr>`).join("");
+}
+load(); setInterval(load, 10000);
+</script>
+</body>
+</html>

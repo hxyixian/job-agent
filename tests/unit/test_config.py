@@ -7,11 +7,10 @@
 
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
+from boot_support import BootedAgent, write_config
 from pydantic import ValidationError
 
 from job_agent.config import Config, load_config, write_back
@@ -300,19 +299,25 @@ def test_bad_dedup_mode_rejected(tmp_path: Path) -> None:
         load_config(p)
 
 
-# ---- 入口最小闭环（S1a 目标：加载配置 → 日志初始化 → 横幅 → 退出）----
+# ---- 入口最小闭环（S1a 建立横幅断言；S5d 起入口常驻：启动 → 横幅 → 优雅退出）----
 
 
-def test_python_m_job_agent_prints_banner() -> None:
-    proc = subprocess.run(
-        [sys.executable, "-m", "job_agent"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",  # [R6-8] 入口强制 UTF-8 输出，Windows 管道解码需显式指定
-        cwd=REPO_ROOT,
-        timeout=120,
-        check=False,
-    )
-    assert proc.returncode == 0, proc.stderr
-    assert "job-agent" in proc.stdout
-    assert "v1.0.0" in proc.stdout
+def test_python_m_job_agent_prints_banner(tmp_path: Path) -> None:
+    """入口横幅 + 退出码语义（S5d 终版：__main__ 常驻后按冒烟口径适配）。
+
+    子进程隔离启动（``boot_support``：临时 JOB_AGENT_HOME/LOCALAPPDATA），
+    横幅出现于 stdout（UTF-8 管道输出 [R6-8]，输出文件显式 utf-8 读取）
+    后优雅停止；断言横幅内容与退出码 0——与原 S1a 断言等价。
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    lock_root = tmp_path / "lock"
+    lock_root.mkdir()
+    write_config(home)
+    with BootedAgent(home, lock_root) as agent:
+        agent.wait_marker("job-agent v1.0.0", timeout=90)
+        stdout = agent.text("stdout")
+        rc = agent.graceful_stop()
+    assert "job-agent" in stdout
+    assert "v1.0.0" in stdout
+    assert rc == 0, agent.text("stderr")

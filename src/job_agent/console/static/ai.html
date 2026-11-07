@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 配置 · job-agent 控制台</title>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<nav class="topnav">
+  <strong>job-agent 控制台</strong>
+  <a href="resume.html">简历与方向</a>
+  <a href="greetings.html">招呼语工作台</a>
+  <a href="config.html">任务配置</a>
+  <a href="notify.html">通知配置</a>
+  <a href="ai.html">AI 配置</a>
+</nav>
+<main>
+
+<div class="banner warn">保存将全量重写 config.yaml：手写注释不会被保留；运行期修改在下一轮调度循环生效。API Key 明文存储于本机配置文件（风险自担 [R2]），页面回显打码（****尾4位）——保持不变即沿用已存原值。</div>
+
+<section class="card" id="ai-form">
+  <h2>AI 服务（OpenAI 兼容协议）</h2>
+  <div class="grid2">
+    <div>
+      <label class="field">Base URL</label>
+      <input type="text" id="ai-base-url" style="width:100%" placeholder="https://api.deepseek.com/v1">
+      <label class="field">模型</label>
+      <input type="text" id="ai-model" placeholder="deepseek-chat">
+      <label class="field">API Key（打码回显）</label>
+      <input type="text" id="ai-api-key" placeholder="sk-…（保持 ****回显 不变即沿用原值）">
+      <label class="field">代理（可选，HTTP 代理地址）</label>
+      <input type="text" id="ai-proxy" placeholder="留空 = 直连">
+    </div>
+    <div>
+      <label class="field">温度（0-2）</label>
+      <input type="number" id="ai-temperature" step="0.1" min="0" max="2">
+      <label class="field">投递判定分数阈值（0-100）</label>
+      <input type="number" id="ai-min-score" min="0" max="100">
+      <label class="field">AI 日调用预算（次）</label>
+      <input type="number" id="ai-budget" min="1">
+      <label class="row" style="margin-top:20px">
+        <input type="checkbox" id="ai-neutral-invest">
+        <span>neutral（基本匹配）允许投递（FR4.2，默认允许）</span>
+      </label>
+    </div>
+  </div>
+  <div class="row">
+    <button type="button" id="btn-save-ai">保存 AI 配置</button>
+    <button type="button" id="btn-ai-test" class="secondary">连通性测试（用当前表单值）</button>
+  </div>
+  <div id="ai-msg" class="msg"></div>
+  <div id="ai-test-result" class="msg"></div>
+</section>
+
+</main>
+<script src="assets/common.js"></script>
+<script>
+'use strict';
+(function () {
+  function collect() {
+    return {
+      base_url: $('ai-base-url').value.trim(),
+      model: $('ai-model').value.trim(),
+      api_key: $('ai-api-key').value,
+      proxy: $('ai-proxy').value.trim(),
+      temperature: num($('ai-temperature').value, 0.3),
+      min_score: num($('ai-min-score').value, 60),
+      daily_budget_calls: num($('ai-budget').value, 1000),
+      neutral_invest: $('ai-neutral-invest').checked
+    };
+  }
+
+  function fill(ai) {
+    $('ai-base-url').value = ai.base_url || '';
+    $('ai-model').value = ai.model || '';
+    $('ai-api-key').value = ai.api_key || '';
+    $('ai-proxy').value = ai.proxy || '';
+    $('ai-temperature').value = ai.temperature === undefined ? 0.3 : ai.temperature;
+    $('ai-min-score').value = ai.min_score === undefined ? 60 : ai.min_score;
+    $('ai-budget').value = ai.daily_budget_calls === undefined ? 1000 : ai.daily_budget_calls;
+    $('ai-neutral-invest').checked = !!ai.neutral_invest;
+  }
+
+  $('btn-save-ai').onclick = function () {
+    api('/api/config/ai', { method: 'PUT', body: collect() }).then(function () {
+      showMsg('ai-msg', '已保存（全量重写 config.yaml）', false);
+    }, function (e) { showMsg('ai-msg', e.message, true); });
+  };
+
+  $('btn-ai-test').onclick = function () {
+    showMsg('ai-test-result', '测试中（发送最小 JSON 探测请求，超时 20s）…', false);
+    api('/api/ai/test', { method: 'POST', body: { config: collect() } }).then(function (data) {
+      if (data.ok) {
+        showMsg('ai-test-result', '连通正常：模型 ' + data.model + '，往返 ' + data.latency_ms + 'ms' +
+          (data.pong ? '' : '（模型未按预期回 pong，但链路可用）'), false);
+      } else {
+        showMsg('ai-test-result', '连通失败：' + data.error, true);
+      }
+    }, function (e) { showMsg('ai-test-result', e.message, true); });
+  };
+
+  api('/api/config/ai').then(function (data) {
+    fill(data.ai || {});
+  }, function (e) { showMsg('ai-msg', e.message, true); });
+})();
+</script>
+</body>
+</html>
