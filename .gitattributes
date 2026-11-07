@@ -1,0 +1,28 @@
+# 统一行尾：文本文件归一为 LF [D2]
+* text=auto eol=lf
+
+# 二进制白名单（不做行尾归一化）[D2]
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.webp   binary
+*.ico    binary
+*.pdf    binary
+*.db     binary
+*.sqlite binary
+*.sqlite3 binary
+*.woff   binary
+*.woff2  binary
+*.ttf    binary
+*.otf    binary
+*.eot    binary
+*.mp3    binary
+*.mp4    binary
+*.zip    binary
+*.7z     binary
+*.gz     binary
+*.exe    binary
+*.dll    binary
+*.pyd    binary
+*.wasm   binary

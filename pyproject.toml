@@ -1,0 +1,83 @@
+[project]
+name = "job-agent"
+version = "1.0.0"
+description = "本地运行的 Boss直聘 AI 求职助手：职位筛选与自动投递、HR 消息 AI 辅助回复、分级告警通知"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    # 浏览器驱动 = Patchright（Playwright drop-in，协议层修补版），
+    # 不依赖 playwright [M4/K5]，锁定 1.64.4（设计文档 §5.3 S1b 定型路线）
+    "patchright==1.64.4",
+    "fastapi",
+    "uvicorn",
+    "openai",
+    "pydantic",
+    "pydantic-settings",
+    "pyyaml",
+    "pypdf",
+    # 注：jinja2 暂不引入（v1 控制台 = 静态 HTML + vanilla JS，无服务端模板，"如需"条件未命中）
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+    "aiosmtpd",
+    "httpx",
+    "types-PyYAML",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/job_agent"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle 错误
+    "W",   # pycodestyle 警告
+    "F",   # pyflakes
+    "I",   # isort（导入排序）
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "RUF", # ruff 专属规则
+]
+ignore = [
+    # 中文文案/注释/docstring 中允许全角标点（ambiguous-unicode-character 系列）
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+
+[tool.mypy]
+# 对 src/job_agent 启用严格子集（S1a 任务书；测试目录不在此范围内）
+files = ["src/job_agent"]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+strict_equality = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-W error"
+filterwarnings = [
+    # 豁免白名单（-W error 之外放行的已知第三方告警；按需增补）：
+    # "ignore::DeprecationWarning:some_vendor_pkg.*",
+]

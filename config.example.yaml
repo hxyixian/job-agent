@@ -1,0 +1,126 @@
+# =====================================================================
+# job-agent 配置示例（v1.0.0）
+#
+# 使用方法：复制本文件为 config.yaml（或在控制台完成首次引导）后按需修改；
+# 未写出的字段/分节自动使用内置默认值（默认值见需求文档 第 10 节）。
+#
+# ⚠ 重要提示：控制台保存配置时会【全量重写】config.yaml，
+#   手写注释会被控制台覆盖——请以本示例文件作为注释参照。
+# =====================================================================
+
+# ---- 站点与浏览器会话 ----
+site:
+  adapter: zhipin                  # 站点适配器：zhipin（真实）/ mock（模拟测试环境）
+  browser_strategy: S1b_patchright # 浏览器策略（v1 定型：Patchright，设计文档 §5.3）
+  channel: chrome                  # 本机浏览器通道：chrome / msedge
+  headless: false                  # 保持有头模式（登录态/风控检测依赖可见窗口）
+
+# ---- 求职目标（值来自首次引导；属个人信息，仅存本机）----
+target:
+  city: ""                         # 求职目标城市；薪资维度 v1 不做 [R13]
+
+# ---- 投递 ----
+delivery:
+  run_schedule:                    # 运行时段；星期 1=周一 … 7=周日（不区分节假日/调休）
+    weekdays: [1, 2, 3, 4, 5]
+    start: "10:00"
+    end: "16:00"
+  hourly_limit: 25                 # 每小时投递上限（滑动 60 分钟窗口）
+  daily_limit: 100                 # 每日投递上限（Asia/Shanghai 自然日）
+  action_delay_range_s: [8, 20]    # 操作间随机延时（秒，区间内随机）
+  polling:                         # HR 消息轮询（默认共用投递时段，可独立配置）
+    interval_range_min: [3, 5]     # 轮询间隔（分钟，区间内随机）
+    schedule: same_as_delivery     # same_as_delivery = 与投递时段共用；
+                                   # 独立配置时改为完整时段对象，例如：
+                                   # schedule: {weekdays: [1, 2, 3, 4, 5], start: "09:00", end: "18:00"}
+  login_patrol:                    # 登录态周期检测（FR1.3）
+    every_loop: true               # 每个任务循环前检测
+    interval_min: 10               # 循环中每 N 分钟检测一次
+  dedup:                           # 同公司去重（FR3.6）
+    mode: permanent_blacklist      # permanent_blacklist=永久拉黑 / cooldown=冷却 N 天
+    cooldown_days: 30
+  browse_limits:                   # 浏览上限（初值保守，X4/试运行校准后修订）
+    detail_hourly: 40              # 职位详情：每小时
+    detail_daily: 200              # 职位详情：每日
+    search_page_hourly: 30         # 搜索翻页：每小时
+  min_interval_s:                  # 操作级最小间隔（随机延时之外的下限约束，H2）
+    detail: 30                     # 打开职位详情 >= 30 秒
+    search: 30                     # 搜索列表加载/翻页/滚动加载 >= 30 秒
+  browse_rampup:                   # 试运行浏览放量（H2）
+    enabled: true
+    first_day:                     # 第 1 个试运行日上限；无风控日逐日翻倍至配置值
+      detail_hourly: 15
+      detail_daily: 60
+    double_per_clean_day: true
+  dry_run: true                    # 试运行模式（首次安装默认开启）：send_* 仅记录不发送
+  ramp_up:                         # 首次实投逐步放量（FR3.9）
+    enabled_days: 3                # 有效运行日数（被限额拦住的当日不计）
+    daily_limit: 10                # 放量期每日投递上限
+    auto_recover: true             # 期满自动恢复配置值并推送低级通知
+
+# ---- 消息 ----
+messaging:
+  auto_reply_limit: 2              # 单会话自动发送消息上限（含招呼语，不含附件简历；下限 1）
+  resume_auto_send_limit_per_conv: 1  # 附件简历自动投递（每会话独立计数）
+  passive_greeting_enabled: false         # 被动招呼（FR3.7，默认关）
+  positive_response_resume_enabled: false # 正向回应自动投递附件简历（FR3.8，默认关）
+  outbox_timeout_min: 60           # 待发箱超时提醒（分钟，FR6.4）
+
+# ---- AI 服务（OpenAI 兼容协议，FR9）----
+ai:
+  base_url: https://api.deepseek.com/v1
+  api_key: ""                      # 明文存本地，注意保管（风险知悉 R2）
+  model: deepseek-chat
+  temperature: 0.3
+  proxy: ""                        # 可选 HTTP 代理（默认留空）
+  min_score: 60                    # 投递判定阈值（临时默认，L1 校准后修订）
+  neutral_invest: true             # neutral 评估结果是否允许投递（FR4.2）
+  daily_budget_calls: 1000         # AI 日调用预算（评估+分类+生成合计，B13）
+  preferences: []                  # AI 偏好规则（V2-7 预留；v1 恒空）
+
+# ---- 匹配排除（预置组+自定义组统一结构；v1 仅加载 preset 组）----
+match:
+  exclude_groups:                  # 预置组默认全关（FR3.2）；启发式判定存在误杀可能
+    - id: outsourcing              # 外包公司
+      kind: preset
+      enabled: false
+      keywords: [外包, 人力资源服务, 软件外包]
+      scope: [company_name, jd_text, tags]
+    - id: headhunter               # 猎头职位
+      kind: preset
+      enabled: false
+      keywords: [猎头]
+      scope: [tags, jd_text]
+    - id: trainee_intern_parttime  # 培训/实习/兼职
+      kind: preset
+      enabled: false
+      keywords: [实习, 兼职, 培训生]
+      scope: [jd_text, tags]
+  company_blacklist: []            # 公司黑名单
+
+# ---- 通知（FR7）----
+notify:
+  feishu:                          # 飞书群机器人 Webhook（主通道，签名校验）
+    webhook: ""
+    secret: ""
+    levels: [high, medium]         # 推送级别
+  email:                           # 邮件 SMTP（仅推送 high 级）
+    smtp_host: ""
+    smtp_port: 465
+    user: ""
+    password: ""
+    to: ""
+  dnd:                             # 免打扰时段（可跨午夜）
+    enabled: false
+    start: "23:00"
+    end: "07:30"
+    high_bypass: true              # 高级告警不受免打扰限制
+
+# ---- 控制台（FR11：仅本机监听）----
+console:
+  host: 127.0.0.1
+  port: 8000
+
+# ---- 数据 ----
+data:
+  db_path: data/agent.db           # SQLite 单库（相对路径基于运行目录）
