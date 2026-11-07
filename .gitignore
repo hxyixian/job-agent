@@ -6,17 +6,18 @@ private/
 # 含 API Key / Webhook 密钥的配置文件
 config.yaml
 config.*.yaml
+!config.example.yaml
 *.env
 .env*
 
 # ===== 运行时数据 =====
-# SQLite 数据库（投递记录/会话/告警）
-data/
+# SQLite 数据库（投递记录/会话/告警）——仅根目录，避免误伤源码/夹具目录
+/data/
 *.db
 *.db-journal
 *.sqlite3
-# 日志
-logs/
+# 日志——仅根目录
+/logs/
 *.log
 
 # ===== 浏览器会话（含登录态，绝不提交）=====
@@ -31,11 +32,15 @@ venv/
 build/
 dist/
 
-# ===== 测试产物 =====
+# ===== 测试与工具缓存 =====
 .pytest_cache/
 .coverage
 htmlcov/
 test-output/
+test-results/
+playwright-report/
+.ruff_cache/
+.mypy_cache/
 
 # ===== IDE / OS =====
 .idea/
