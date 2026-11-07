@@ -44,7 +44,10 @@
 
 ## SubStage: S1b 数据库与迁移
 
-- 所属 Stage：Stage 1 ｜ 依赖前置：无 ｜ 并行状态：可并行
+- 所属 Stage：Stage 1
+- 依赖前置：无
+- 并行状态：可与 S1a/S1c 并行
+- 所属阶段：阶段三 - 开发
 
 ### 背景与目标
 建立 SQLite 访问层与第一版 schema，支撑后续所有核心表。
@@ -64,7 +67,10 @@
 
 ## SubStage: S1c 日志、单实例锁与工具
 
-- 所属 Stage：Stage 1 ｜ 依赖前置：无 ｜ 并行状态：可并行
+- 所属 Stage：Stage 1
+- 依赖前置：无
+- 并行状态：可与 S1a/S1b 并行
+- 所属阶段：阶段三 - 开发
 
 ### 任务内容
 1. `logging_setup.py`：`logs/app.log`(INFO, 10MB×7 轮转) + `logs/error.log`(ERROR+) + 控制台；**打码过滤器**：消息中的 api_key/webhook secret/smtp password 替换为 `****`；简历全文禁止落日志（长度阈值+关键词拦截告警）[S3]。

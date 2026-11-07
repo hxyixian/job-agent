@@ -6,7 +6,7 @@
 
 ## SubStage: S3a AI 客户端与匹配评估
 
-- 所属 Stage：Stage 3 ｜ 依赖前置：S1a ｜ 并行：可立即开工
+- 所属 Stage：Stage 3 ｜ 依赖前置：S1a ｜ 并行：可立即开工 ｜ 所属阶段：阶段三 - 开发
 
 ### 任务内容
 1. `ai/client.py`：OpenAI 兼容客户端（openai SDK，base_url/api_key/model/temperature/proxy 从配置）；统一调用入口 `call_json(messages, schema: type[BaseModel])`：请求 → 文本提取 JSON（代码块/裸 JSON 兜底）→ Pydantic 校验 → 失败重试 ≤2（指数退避）→ 仍失败抛 `AIUnparseableError`；**日预算**：计数器（评估+分类+生成合计）≥ `daily_budget_calls` → `AIBudgetExhausted` [B13]；超时按配置。
@@ -23,7 +23,7 @@ A-CORE-12 逻辑层 + N5 空表验收在此覆盖；AI 一律 mock（TEST1 离�
 
 ## SubStage: S3b 消息分类与回复生成 + 护栏
 
-- 依赖前置：S3a ｜ 并行：与 S3c/S3d 并行
+- 依赖前置：S3a ｜ 并行：与 S3c/S3d 并行 ｜ 所属阶段：阶段三 - 开发
 
 ### 任务内容
 1. `ai/classify.py`：输入最近 10 条消息 → 输出 category ∈ {low_risk, key, positive_response, no_reply} + reason [B1/B2]；解析失败 → 恒 key（保守）。
@@ -38,7 +38,7 @@ A-CORE-7/13 的 AI 侧逻辑全绿。
 
 ## SubStage: S3c 招呼语与简历结构化
 
-- 依赖前置：S3a ｜ 并行：可并行
+- 依赖前置：S3a ｜ 并行：可并行 ｜ 所属阶段：阶段三 - 开发
 
 ### 任务内容
 1. `ai/greeting.py`：`generate_candidates(kind: active|passive, resume, directions) -> list[str]`（3 条）[FR5]。
@@ -52,7 +52,7 @@ A-CORE-15 的简历侧 + FR2 全逻辑离线可测。
 
 ## SubStage: S3d 通知管线
 
-- 依赖前置：S1a、S1b ｜ 并行：可并行
+- 依赖前置：S1a、S1b ｜ 并行：可并行 ｜ 所属阶段：阶段三 - 开发
 
 ### 任务内容
 1. `notify/base.py`：`EventType` 枚举（§11 全表）+ `level_of(event)`（高/中/低映射 = 设计文档 §11 权威表）；`Notifier` 插件接口。

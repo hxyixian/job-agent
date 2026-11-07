@@ -18,7 +18,7 @@
 1. `zhipin/selectors.yaml`：集中选择器配置（语义优先、禁 hash class、fallback 链 [选择器策略]）；基于 B0 素材编写，每选择器 ≥2 级 fallback。
 2. `check_login_state()`：URL/元素复合判定（登录页标志 vs 用户标志）。
 3. `detect_risk()`：验证码页/风控页特征；**EVICTED**（about:blank/非站点域）与 **SECURITY_CHECK**（URL 含 `_security_check`/验证类路径、页面出现"安全验证/环境异常/验证码"文字、导航落点非目标页连续 2 次）[G2/H1]；适配器失效计数（关键元素连续 3 次失败 [B7]）；**内容级健康检查**（搜索页零卡片/详情页无 JD 正文计入 B7 计数 [H1]）。
-4. `search_jobs(filters, page)`：URL 参数构造（query/city/薪资/经验/规模）+ 列表解析（JobRef 全字段；薪资文本解析复用 S2a 规则）；翻页计入 search_page_hourly [G3]。
+4. `search_jobs(filters, page)`：URL 参数构造（query/city/经验/规模；**薪资参数已移除 [R13/F7]**——薪资维度 v1 不做）；+ 列表解析（JobRef 全字段，**薪资仅保留 salary_text 原文展示字段 [F3]**）；翻页计入 search_page_hourly [G3]；**company_key 取值来源 [F4]：公司/品牌链接中的平台 ID → 后备公司名元素（禁止用 HR 姓名/boss-name），离线测试：同公司不同 HR 两卡 → 同一 company_key**。
 5. 测试：**离线**——B0 脱敏 HTML 快照作夹具（解析器纯函数化：html→JobRef 列表）[T5]。
 
 ## SubStage: S6b 详情与发送

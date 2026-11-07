@@ -8,7 +8,7 @@
 
 ## SubStage: S2a 领域模型与判定规则
 
-- 所属 Stage：Stage 2 ｜ 依赖前置：S1a ｜ 并行：可立即开工
+- 所属 Stage：Stage 2 ｜ 依赖前置：S1a ｜ 并行：可立即开工 ｜ 所属阶段：阶段三 - 开发
 
 ### 任务内容
 1. `models.py`：设计文档 §5.1 全部模型（JobRef/JobDetail/Conversation/MsgType/Message/SendOutcome/LoginState/RiskSignal）；`Message.is_ours_auto` 注释标明"核心层计算" [G6]。
@@ -28,12 +28,12 @@
 
 ## SubStage: S2b 发送状态机与对账
 
-- 依赖前置：S1b、S2a（SendOutcome）｜ 并行：可与 S2c/S2d 并行
+- 依赖前置：S1b、S2a（SendOutcome）｜ 并行：可与 S2c/S2d 并行 ｜ 所属阶段：阶段三 - 开发
 
 ### 任务内容
 1. `core/state_machine.py`：`SendStateMachine`——`begin(kind,target,digest)->intent_id`（写 pending）、`resolve(intent_id, outcome)`、`startup_recover()`（残留 pending→unknown，**绝不重发**）[B4]；
-2. `reconcile(conv_messages, intents)`：按 `payload_digest` + ±10min 窗口匹配 [G6]；匹配规则：digest 归一化（去空白/截断 64 字符 hash）；匹配不上 → 该我方消息标记"人工"（供 B3 接管）；
-3. `quota.py`：`used(window, kind)` 从 `send_intents` 推算——`state IN (pending,sent,unknown,skipped_dryrun)` **不分 dry_run** [G1]；小时窗口=滑动 60min，日=Asia/Shanghai 自然日 [B18]；含 `browse_used()`（详情/翻页计数，同不分模式）[G3]。
+2. `reconcile(conv_messages, intents)` [F1 匹配规则]：**greeting 按关联岗位 job_id + ±10min 窗口（不做文本摘要比对——实际文本来自平台设置）；reply/resume 按 payload_digest + ±10min 窗口（digest 归一化：去空白/截断 64 字符 hash）**；匹配不上 → 该我方消息标记"人工"（供 B3 接管）；
+3. `quota.py`：`used(window, kind)` 从 `send_intents` 推算——`state IN (pending,sent,unknown,skipped_dryrun)` **不分 dry_run** [G1]；小时窗口=滑动 60min，**日窗口=北京自然日（起点用 `timeutil.day_start_utc`，R6-4 契约，禁止用 UTC 日期）** [B18]；含 `browse_used()`（详情/翻页计数，同不分模式）[G3]。
 4. 测试：T4-1 崩溃恢复、unknown 计入限额、同日切模式额度连续、digest 匹配三态。
 
 ### 验收标准
@@ -43,7 +43,7 @@ A-CORE-2/3 的逻辑层在此全绿；任何路径不得出现"自动重发"代�
 
 ## SubStage: S2c 调度器（时段/频率/闸门）
 
-- 依赖前置：S2b（quota）｜ 并行：与 S2d 并行
+- 依赖前置：S2b（quota）｜ 并行：与 S2d 并行 ｜ 所属阶段：阶段三 - 开发
 
 ### 任务内容
 1. `core/scheduler.py`：`RunSchedule.is_active(now)`（weekday∈配置、start≤now<end；**工作日=周一~五**，不处理节假日 [s2]）；轮询时段可独立（默认继承投递）[P1]；
@@ -58,10 +58,10 @@ A-CORE-3/9 逻辑层全绿；禁止在调度器内做任何 IO。
 
 ## SubStage: S2d 会话状态与放量状态机
 
-- 依赖前置：S2a、S1b ｜ 并行：与 S2c 并行
+- 依赖前置：S2a、S1b ｜ 并行：与 S2c 并行 ｜ 所属阶段：阶段三 - 开发
 
 ### 任务内容
-1. `core/session.py`：会话计数（`auto_sent_count` 含招呼语不含简历、`resume_sent_count`≤1 [A2]）；`manual_takeover` 置位（digest 匹配失败的我方消息 [B3/G6]）；基线快照写入与过滤 [B3]；
+1. `core/session.py`：会话计数（`auto_sent_count` 含招呼语不含简历、`resume_sent_count`≤1 [A2]）；`manual_takeover` 置位（按 §5.5.I2/I8 匹配规则，greeting 核验读回消息不触发 [F1]）；基线快照写入与过滤 [B3]；**每日 greeting 核验标记（is_greeting_probe_done/mark [F1/§I8]）**；
 2. `core/rampup.py`：放量状态机——`remaining_days=3`、**有效运行日**判定（当日发生投递动作；被限额拦住的当日不计 [G10/Q20]）、期间标志（低风险回复关、FR3.7/3.8 关）、期满自动恢复+低级通知事件（EventType.RAMPUP_DONE）、手动提前/延长接口；**试运行浏览放量档位**（首日 15/时·60/天，无风控日翻倍，风控信号回首档 [H2]）；**放量/试运行期间任何风控信号 → 暂停全部任务 + EventType 高级告警 + 等用户决策（M5：无 fallback_semi_auto、无自动恢复）**；
 3. `dryrun.py`：模式标志、拟发送记录写入（skipped_dryrun）、隔离查询助手（去重/统计/会话计数过滤 dry_run=1 [N2]）；
 4. 测试：计数口径（A-CORE-6 逻辑层）、放量日历（含被限额日不计）、dry_run 隔离（N2 重点用例）。

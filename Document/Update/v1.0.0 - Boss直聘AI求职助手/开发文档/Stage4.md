@@ -42,7 +42,7 @@ Mock 不做任何网络/浏览器操作。
 - 依赖前置：S4a（adapter 接口）、S2b/S2c ｜ 并行：接口冻结后即可开发（用 Mock）
 
 ### 任务内容
-`core/delivery.py`：设计文档 §7 十步流水线；要点：列表过滤（S2a rules）→ 详情（浏览计数+1 [G3]）→ 评估缓存（jobs/evaluations 表，命中跳过 AI）→ 判定（verdict≠skip ∧ score≥min_score，矛盾从保守）→ dry_run 分支（skipped_dryrun + applications(dry_run=1)）→ 发送（state_machine.begin→adapter.send_greeting→resolve）→ 去重登记 → 8-20s 节流；被动招呼计入投递限额 [D0]；PlatformLimitError → 当日停投 [B6]。
+`core/delivery.py`：设计文档 §7 十步流水线；要点：列表过滤（S2a rules，**匿名卡跳过 [v13]**）→ 详情（浏览计数+1 [G3]）→ 评估缓存（jobs/evaluations 表，命中跳过 AI）→ 判定（verdict≠skip ∧ score≥min_score，矛盾从保守）→ dry_run 分支（begin(dry_run=True)→skipped_dryrun + applications(dry_run=1)）→ 发送（state_machine.begin→adapter.send_greeting→resolve）→ 去重登记 → 8-20s 节流；**每日首次 send_greeting 成功后的招呼语核验 [F1]：读回该会话我方首条消息（adapter.get_messages）与当前模板归一化比较（去空白/标点）——不一致→暂停投递+EventType.GREETING_MISMATCH（中级），该消息不参与接管判定**；被动招呼计入投递限额 [D0]；PlatformLimitError → 当日停投 [B6]；浏览上限触发 → EventType.BROWSE_LIMIT_REACHED（与 PLATFORM_LIMIT 区分 [F10]）。
 
 ### 验收标准
 A-CORE-1（投递半链路）/A-CORE-3/8 逻辑全绿。
