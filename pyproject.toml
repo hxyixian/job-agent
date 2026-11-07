@@ -74,6 +74,12 @@ warn_unused_ignores = true
 warn_return_any = true
 strict_equality = true
 
+# patchright 1.64.4 不随包分发 py.typed（S4b 核实）；驱动入口/异常类按
+# Any 处理，会话层自身保持严格类型
+[[tool.mypy.overrides]]
+module = "patchright.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-W error"

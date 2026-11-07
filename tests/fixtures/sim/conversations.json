@@ -1,0 +1,22 @@
+{
+  "conversations": [
+    {
+      "conv_id": "C-1001",
+      "peer_name": "李经理",
+      "job_id": "J001",
+      "script": "cold"
+    },
+    {
+      "conv_id": "C-1002",
+      "peer_name": "王总监",
+      "job_id": "J003",
+      "script": "warm"
+    },
+    {
+      "conv_id": "C-1003",
+      "peer_name": "赵主管",
+      "job_id": "J005",
+      "script": "noreply"
+    }
+  ]
+}

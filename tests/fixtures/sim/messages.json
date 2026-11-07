@@ -1,0 +1,129 @@
+{
+  "base_time": "2026-11-07T02:00:00Z",
+  "scripts": {
+    "cold": [
+      {
+        "offset_min": 0,
+        "direction": "out",
+        "sender": "me",
+        "msg_type": "TEXT",
+        "text": "李经理您好，我对贵司的 Python 后端工程师职位很感兴趣，期待能与您进一步沟通。"
+      },
+      {
+        "offset_min": 30,
+        "direction": "in",
+        "sender": "hr",
+        "msg_type": "TEXT",
+        "text": "你好，简历我们先看一下，有进展会再联系你。"
+      }
+    ],
+    "warm": [
+      {
+        "offset_min": 0,
+        "direction": "out",
+        "sender": "me",
+        "msg_type": "TEXT",
+        "text": "王总监您好，我对前端开发工程师（React）这个职位很感兴趣，期待交流。"
+      },
+      {
+        "offset_min": 20,
+        "direction": "in",
+        "sender": "hr",
+        "msg_type": "TEXT",
+        "text": "您好！看了您的简历和我们方向很匹配，方便介绍一下您最近负责的可视化项目吗？"
+      },
+      {
+        "offset_min": 45,
+        "direction": "in",
+        "sender": "hr",
+        "msg_type": "RESUME_REQUEST_CARD",
+        "text": "（系统卡片：对方请求查看你的附件简历）"
+      },
+      {
+        "offset_min": 60,
+        "direction": "in",
+        "sender": "hr",
+        "msg_type": "TEXT",
+        "text": "另外想了解下您目前的期望薪资范围大概是多少？"
+      }
+    ],
+    "price": [
+      {
+        "offset_min": 0,
+        "direction": "out",
+        "sender": "me",
+        "msg_type": "TEXT",
+        "text": "您好，我对这个职位很感兴趣，期待进一步沟通。"
+      },
+      {
+        "offset_min": 25,
+        "direction": "in",
+        "sender": "hr",
+        "msg_type": "TEXT",
+        "text": "你好，我们这个岗位的预算区间比较有限，你期望的薪资还有商量的空间吗？"
+      },
+      {
+        "offset_min": 50,
+        "direction": "in",
+        "sender": "hr",
+        "msg_type": "TEXT",
+        "text": "如果 base 适当放宽预期，我们可以在绩效和其他福利上做补偿。"
+      }
+    ],
+    "interview": [
+      {
+        "offset_min": 0,
+        "direction": "out",
+        "sender": "me",
+        "msg_type": "TEXT",
+        "text": "您好，我对这个职位很感兴趣，期待进一步沟通。"
+      },
+      {
+        "offset_min": 40,
+        "direction": "in",
+        "sender": "hr",
+        "msg_type": "TEXT",
+        "text": "您好，初筛已经通过，本周四下午 3 点方便安排一面吗？"
+      },
+      {
+        "offset_min": 41,
+        "direction": "in",
+        "sender": "hr",
+        "msg_type": "INTERVIEW_CARD",
+        "text": "（系统卡片：面试邀请——本周四 15:00 视频面试）"
+      }
+    ],
+    "offer": [
+      {
+        "offset_min": 0,
+        "direction": "out",
+        "sender": "me",
+        "msg_type": "TEXT",
+        "text": "您好，我对这个职位很感兴趣，期待进一步沟通。"
+      },
+      {
+        "offset_min": 90,
+        "direction": "in",
+        "sender": "hr",
+        "msg_type": "TEXT",
+        "text": "恭喜您通过终面！我们打算给您发放 offer，方便同步下入职时间预期吗？"
+      },
+      {
+        "offset_min": 95,
+        "direction": "in",
+        "sender": "hr",
+        "msg_type": "CONTACT_REQUEST_CARD",
+        "text": "（系统卡片：对方请求交换联系方式）"
+      }
+    ],
+    "noreply": [
+      {
+        "offset_min": 0,
+        "direction": "out",
+        "sender": "me",
+        "msg_type": "TEXT",
+        "text": "赵主管您好，我对测试开发工程师这个职位很感兴趣，期待与您沟通。"
+      }
+    ]
+  }
+}
